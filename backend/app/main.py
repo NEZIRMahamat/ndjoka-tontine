@@ -13,8 +13,8 @@ app = FastAPI(
 async def read_root() -> dict[str, str]:
     """Réponse minimale confirmant que l'API est accessible."""
     return {
-        "Description": "Ndjoka Tontine API",
-        "version": "0.1.0", # Version de l'API flexible et évolutive (plus tard dans config.py)
+        "description": "Ndjoka Tontine API",
+        "version": "0.1.0",  # Version de l'API flexible et évolutive (plus tard dans config.py)
         "documentation": "/docs",
     }
 

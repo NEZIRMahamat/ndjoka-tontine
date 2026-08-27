@@ -1,7 +1,8 @@
 # Backend Ndjoka Tontine
 
-Premier jalon du backend FastAPI. Il expose uniquement les routes publiques de
-base et n'utilise encore ni Auth0 ni PostgreSQL.
+Backend FastAPI de Ndjoka Tontine. Il expose actuellement les routes publiques
+de base et contient le validateur des Access Tokens Auth0. La première route
+protégée sera ajoutée dans le ticket NDJ-7. PostgreSQL n'est pas encore utilisé.
 
 ## Prérequis
 
@@ -41,6 +42,32 @@ uv run ruff format --check .
 
 ## Variables d'environnement
 
-Aucune variable d'environnement n'est nécessaire pour ce premier jalon. Le
-fichier `.env.example` sera enrichi au prochain jalon avec les valeurs publiques
-nécessaires à la validation Auth0, sans secret réel.
+Complétez `.env.dev` à partir de `.env.example` :
+
+```dotenv
+AUTH0_DOMAIN=your-tenant.eu.auth0.com
+AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
+```
+
+`AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
+correspondre exactement à l'Identifier de la Custom API Auth0.
+
+Le backend charge `.env.dev` par défaut. Pour sélectionner `.env.prod`, lancez
+le processus avec `APP_ENV=prod`. Les variables système restent prioritaires,
+notamment lors du déploiement sur Render.
+
+Aucun Client ID ou Client Secret n'est requis pour valider un Access Token
+RS256. Le backend récupère uniquement les clés publiques JWKS d'Auth0.
+
+## Validation Auth0
+
+Le validateur vérifie :
+
+- l'algorithme RS256 ;
+- la signature avec la clé correspondant au `kid` du JWT ;
+- l'issuer du tenant Auth0 ;
+- l'audience de la Custom API ;
+- les claims obligatoires, dont l'expiration.
+
+Les tests génèrent leurs propres clés RSA et leurs JWT en mémoire. Ils ne
+contactent jamais le tenant Auth0.

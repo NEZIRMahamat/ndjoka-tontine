@@ -10,7 +10,7 @@ def test_root_returns_api_name() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "Description": "Ndjoka Tontine API",
+        "description": "Ndjoka Tontine API",
         "version": "0.1.0",
         "documentation": "/docs",
     }
