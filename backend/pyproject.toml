@@ -1,0 +1,34 @@
+[project]
+name = "ndjoka-tontine-backend"
+version = "0.1.0"
+description = "API FastAPI de la plateforme de tontine digitale Ndjoka"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.116,<1.0",
+    "uvicorn[standard]>=0.35,<1.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.12,<3.0",
+    "pytest>=8.4,<10.0",
+    "ruff>=0.12,<1.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

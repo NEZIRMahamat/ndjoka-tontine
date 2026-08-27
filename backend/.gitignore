@@ -1,0 +1,13 @@
+# Variables d'environnement locales (les exemples restent versionnables)
+.env
+.env.*
+!.env.example
+
+
+
+# Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+.venv/

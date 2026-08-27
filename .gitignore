@@ -1,7 +1,13 @@
+# macOS
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class
+
+# DDonnées & infos local contenant des informations de configuration
+docs/
 
 # C extensions
 *.so

@@ -1,0 +1,12 @@
+# Dépendances et artefacts Vite
+node_modules/
+dist/
+dist-ssr/
+
+# Variables locales (seul le modèle peut être versionné)
+.env
+.env.*
+!.env.example
+
+# Fichiers locaux des outils
+*.local
