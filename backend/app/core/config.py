@@ -1,12 +1,52 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SUPPORTED_ENVIRONMENTS = {"dev", "prod"}
+
+
+class CorsSettings(BaseSettings):
+    """Origines autorisées à appeler l'API depuis un navigateur."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173"],
+    )
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_allowed_origins(cls, values: list[str]) -> list[str]:
+        origins: list[str] = []
+
+        for value in values:
+            origin = value.strip()
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError(
+                    "Chaque origine CORS doit contenir uniquement un schéma HTTP(S) "
+                    "et un hôte"
+                )
+
+            normalized_origin = f"{parsed.scheme}://{parsed.netloc}"
+            if normalized_origin not in origins:
+                origins.append(normalized_origin)
+
+        if not origins:
+            raise ValueError("CORS_ALLOWED_ORIGINS doit contenir au moins une origine")
+
+        return origins
 
 
 class Settings(BaseSettings):
@@ -61,6 +101,15 @@ def get_environment_file() -> Path:
         )
 
     return BACKEND_ROOT / f".env.{environment}"
+
+
+@lru_cache
+def get_cors_settings() -> CorsSettings:
+    """Charger la configuration CORS sans exiger les paramètres Auth0."""
+    return CorsSettings(
+        _env_file=get_environment_file(),
+        _env_file_encoding="utf-8",
+    )
 
 
 @lru_cache

@@ -108,6 +108,35 @@ h1 {
   color: #64748b;
 }
 
+.api-status {
+  color: #475569;
+}
+
+.api-result {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 0.75rem;
+  color: #334155;
+  background: #f0fdf4;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.api-result-error {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.api-badge {
+  color: #166534;
+  font-weight: 700;
+}
+
 .button {
   margin-top: 0.75rem;
   padding: 0.8rem 1.25rem;
@@ -142,6 +171,12 @@ h1 {
 
 .button-secondary:hover {
   color: #fff;
+}
+
+.button-compact {
+  margin-top: 0.25rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.875rem;
 }
 
 .configuration-list {

@@ -1,8 +1,8 @@
 # Backend Ndjoka Tontine
 
-Backend FastAPI de Ndjoka Tontine. Il expose actuellement les routes publiques
-de base et contient le validateur des Access Tokens Auth0. La première route
-protégée sera ajoutée dans le ticket NDJ-7. PostgreSQL n'est pas encore utilisé.
+Backend FastAPI de Ndjoka Tontine. Il expose les routes publiques de base et la
+route protégée `/api/v1/me`, adossée au validateur des Access Tokens Auth0.
+PostgreSQL n'est pas encore utilisé.
 
 ## Prérequis
 
@@ -30,6 +30,7 @@ L'API est alors disponible sur `http://127.0.0.1:8000` :
 
 - `GET /` présente l'API ;
 - `GET /api/v1/health` vérifie son état ;
+- `GET /api/v1/me` retourne l'identité et les permissions du porteur d'un Access Token Auth0 valide ;
 - `GET /docs` ouvre la documentation interactive OpenAPI.
 
 ## Vérifications
@@ -47,10 +48,13 @@ Complétez `.env.dev` à partir de `.env.example` :
 ```dotenv
 AUTH0_DOMAIN=your-tenant.eu.auth0.com
 AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
+CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
 ```
 
 `AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
 correspondre exactement à l'Identifier de la Custom API Auth0.
+Les origines CORS sont une liste JSON explicite ; n'utilisez pas `*` pour une
+route recevant un Bearer Token.
 
 Le backend charge `.env.dev` par défaut. Pour sélectionner `.env.prod`, lancez
 le processus avec `APP_ENV=prod`. Les variables système restent prioritaires,

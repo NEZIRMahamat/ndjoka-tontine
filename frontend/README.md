@@ -2,8 +2,8 @@
 
 Frontend React, TypeScript et Vite de l'application Ndjoka Tontine.
 
-Le frontend intègre Auth0 pour la connexion et la déconnexion. Les appels au
-backend seront ajoutés pendant les tickets suivants.
+Le frontend intègre Auth0 pour la connexion et la déconnexion, puis utilise
+l'Access Token pour interroger la route protégée du backend.
 
 ## Prérequis
 
@@ -34,9 +34,10 @@ Créez ou complétez `.env.dev` à partir de `.env.example` :
 VITE_AUTH0_DOMAIN=your-tenant.eu.auth0.com
 VITE_AUTH0_CLIENT_ID=your_spa_client_id
 VITE_AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Ces trois valeurs sont publiques. N'ajoutez jamais de Client Secret Auth0 dans
+Ces valeurs sont publiques. N'ajoutez jamais de Client Secret Auth0 dans
 un fichier Vite ou dans une variable préfixée par `VITE_`.
 
 Dans les réglages de l'application Auth0 de type **Single Page Application**,
@@ -69,4 +70,5 @@ charge le mode `prod` (`.env.prod`). Ces fichiers locaux restent ignorés par Gi
 1. Ouvrez `http://localhost:5173` et cliquez sur **Se connecter**.
 2. Authentifiez-vous sur la page Universal Login d'Auth0.
 3. Vérifiez le retour sur l'application et l'affichage de l'utilisateur.
-4. Cliquez sur **Se déconnecter** et vérifiez le retour à l'état déconnecté.
+4. Vérifiez que l'état **API protégée accessible** et le `sub` Auth0 s'affichent.
+5. Cliquez sur **Se déconnecter** et vérifiez le retour à l'état déconnecté.

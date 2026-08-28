@@ -1,16 +1,27 @@
 from functools import lru_cache
-from typing import Any, Protocol
+from typing import Annotated, Any, Protocol
 
 import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWK, PyJWKClient
 from jwt.exceptions import PyJWTError
+from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
+from app.schemas.auth import TokenPayload
 
 AUTH0_ALGORITHMS = ["RS256"]
 REQUIRED_CLAIMS = ["iss", "sub", "aud", "exp", "iat"]
 
 type TokenClaims = dict[str, Any]
+
+bearer_scheme = HTTPBearer(
+    bearerFormat="JWT",
+    scheme_name="Auth0Bearer",
+    description="Access Token Auth0 destiné à l'API Ndjoka Tontine",
+    auto_error=False,
+)
 
 
 class SigningKeyProvider(Protocol):
@@ -66,3 +77,30 @@ class Auth0TokenValidator:
 def get_token_validator() -> Auth0TokenValidator:
     """Conserver le cache JWKS pendant toute la vie du processus."""
     return Auth0TokenValidator(get_settings())
+
+
+def unauthorized(detail: str) -> HTTPException:
+    """Construire une réponse 401 conforme au schéma Bearer."""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def get_current_token_payload(
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
+    validator: Annotated[Auth0TokenValidator, Depends(get_token_validator)],
+) -> TokenPayload:
+    """Extraire et valider l'Access Token transmis dans l'en-tête Bearer."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise unauthorized("Authentification requise")
+
+    try:
+        claims = validator.validate(credentials.credentials)
+        return TokenPayload.model_validate(claims)
+    except (TokenValidationError, ValidationError) as error:
+        raise unauthorized("Access Token invalide ou expiré") from error
