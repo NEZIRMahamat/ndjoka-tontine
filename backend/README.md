@@ -6,7 +6,7 @@ PostgreSQL n'est pas encore utilisé.
 
 ## Prérequis
 
-- Python 3.12 ou supérieur
+- Python 3.13.12, fixé dans `.python-version`
 - [uv](https://docs.astral.sh/uv/)
 
 ## Installation
@@ -48,7 +48,7 @@ Complétez `.env.dev` à partir de `.env.example` :
 ```dotenv
 AUTH0_DOMAIN=your-tenant.eu.auth0.com
 AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
-CORS_ALLOWED_ORIGINS=["http://localhost:5173"]
+CORS_ALLOWED_ORIGINS=["http://localhost:5173","https://ndjoka-tontine.vercel.app"]
 ```
 
 `AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
@@ -62,6 +62,23 @@ notamment lors du déploiement sur Render.
 
 Aucun Client ID ou Client Secret n'est requis pour valider un Access Token
 RS256. Le backend récupère uniquement les clés publiques JWKS d'Auth0.
+
+## Préparation Render
+
+Créez un service Web Python avec `backend` comme répertoire racine, puis
+utilisez :
+
+```text
+Build Command: uv sync --locked --no-dev
+Start Command: uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Health Check Path: /api/v1/health
+```
+
+Render fournit dynamiquement la variable `PORT`. Configurez aussi dans le
+service `APP_ENV=prod`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` et
+`CORS_ALLOWED_ORIGINS`. Cette dernière doit rester une liste JSON et contenir le
+domaine Vercel réellement attribué au projet. Ne configurez aucun Client Secret
+Auth0 pour cette API.
 
 ## Validation Auth0
 
