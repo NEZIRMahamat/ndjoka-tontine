@@ -5,9 +5,12 @@ description = "API FastAPI de la plateforme de tontine digitale Ndjoka"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.19,<2.0",
+    "asyncpg>=0.31,<1.0",
     "fastapi>=0.116,<1.0",
     "pydantic-settings>=2.10,<3.0",
     "pyjwt[crypto]>=2.10,<3.0",
+    "sqlalchemy[asyncio]>=2.0,<2.1",
     "uvicorn[standard]>=0.35,<1.0",
 ]
 
