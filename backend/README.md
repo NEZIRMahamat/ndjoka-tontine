@@ -103,6 +103,22 @@ Le validateur vérifie :
 Les tests génèrent leurs propres clés RSA et leurs JWT en mémoire. Ils ne
 contactent jamais le tenant Auth0.
 
+## Liaison avec l'utilisateur local
+
+Le module `app/modules/users/` sait désormais relier le claim `sub` d'un token
+Auth0 validé à une ligne PostgreSQL :
+
+- la recherche conserve le `sub` exact, sans le découper ni le normaliser ;
+- une identité inconnue crée un utilisateur `active` avec un e-mail encore nul ;
+- `auth0_sub` reste la seule identité canonique et unique ;
+- `INSERT ... ON CONFLICT DO NOTHING` empêche les doublons lors de deux
+  premières connexions simultanées ;
+- une reconnexion ne modifie ni l'e-mail ni le statut métier existants.
+
+La dépendance `get_current_ndjoka_user` compose le token validé et la session
+SQLAlchemy. Elle n'est volontairement pas encore utilisée par `/api/v1/me` :
+ce branchement et l'évolution de la réponse appartiennent à NDJ-19.
+
 ## Migrations de schéma
 
 Alembic est l'unique mécanisme de modification du schéma PostgreSQL. Depuis
@@ -119,9 +135,10 @@ La configuration utilise `DATABASE_URL` et `Base.metadata`, sans conserver
 d'identifiant dans `alembic.ini`. Elle crée une connexion asynchrone dédiée à
 chaque exécution, distincte du moteur de l'application.
 
-À ce stade, `heads`, `history` et `current` n'affichent encore aucune révision :
-NDJ-16 initialise seulement l'infrastructure. La première migration sera créée
-avec la table `users` dans NDJ-17. Pour une future évolution du schéma :
+La première migration crée la table locale `users` avec un UUID, l'identifiant
+canonique `auth0_sub`, un e-mail optionnel, un statut et des timestamps. Elle ne
+contient aucun secret d'authentification : Auth0 reste responsable des mots de
+passe et des facteurs d'authentification. Pour une future évolution du schéma :
 
 ```bash
 uv run alembic revision --autogenerate -m "description de la migration"

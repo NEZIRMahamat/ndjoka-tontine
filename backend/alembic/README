@@ -3,5 +3,6 @@ Configuration Alembic asynchrone de Ndjoka Tontine.
 Les commandes sont exécutées depuis `backend/`. L'URL PostgreSQL provient de
 `DATABASE_URL` et n'est jamais conservée dans `alembic.ini`.
 
-Le dossier `versions/` ne contient volontairement aucune révision pour NDJ-16.
-La première migration métier sera créée avec la table `users` dans NDJ-17.
+La première révision crée la table `users`. Les évolutions suivantes du schéma
+doivent être ajoutées sous forme de nouvelles révisions, jamais en modifiant une
+migration déjà appliquée dans un environnement partagé.

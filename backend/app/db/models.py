@@ -9,4 +9,6 @@ from app.db.base import Base
 
 def load_all_models() -> tuple[type[Base], ...]:
     """Importer et retourner tous les modèles déclaratifs connus."""
-    return ()
+    from app.modules.users.models import User
+
+    return (User,)

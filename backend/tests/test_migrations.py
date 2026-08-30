@@ -41,6 +41,18 @@ def test_alembic_offline_environment_uses_database_url(
     get_database_settings.cache_clear()
 
     try:
-        command.upgrade(build_alembic_config(), "head", sql=True)
+        config = build_alembic_config()
+        command.upgrade(config, "head", sql=True)
+        upgrade_sql = config.output_buffer.getvalue()
     finally:
         get_database_settings.cache_clear()
+
+    assert "CREATE TABLE users" in upgrade_sql
+    assert "id UUID DEFAULT gen_random_uuid() NOT NULL" in upgrade_sql
+    assert "auth0_sub VARCHAR(255) NOT NULL" in upgrade_sql
+    assert "email VARCHAR(255)" in upgrade_sql
+    assert "status VARCHAR(30) DEFAULT 'active' NOT NULL" in upgrade_sql
+    assert "TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL" in upgrade_sql
+    assert "CONSTRAINT pk_users PRIMARY KEY (id)" in upgrade_sql
+    assert "CONSTRAINT ck_users_status CHECK" in upgrade_sql
+    assert "CONSTRAINT uq_users_auth0_sub UNIQUE (auth0_sub)" in upgrade_sql
