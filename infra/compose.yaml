@@ -22,5 +22,23 @@ services:
       retries: 5
       start_period: 10s
 
+  postgres_test:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: ndjoka_test
+      POSTGRES_USER: ndjoka_test
+      POSTGRES_PASSWORD: ndjoka_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ndjoka_test -d ndjoka_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
 volumes:
   postgres_data:

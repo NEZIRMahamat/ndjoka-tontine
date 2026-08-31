@@ -1,12 +1,22 @@
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth0 import TokenValidationError, get_token_validator
+from app.db.session import get_db_session
 from app.main import app
+from app.modules.users import dependencies as user_dependencies
+from app.modules.users.models import USER_STATUS_ACTIVE, User
 
 FRONTEND_ORIGIN = "http://localhost:5173"
+LOCAL_USER_ID = UUID("c132a94e-fef9-4f8f-b319-f9b52ae4fddb")
+LOCAL_USER_CREATED_AT = datetime(2026, 8, 30, 9, 15, 30, tzinfo=UTC)
+LOCAL_USER_UPDATED_AT = datetime(2026, 8, 31, 10, 45, 12, tzinfo=UTC)
 
 
 class StubTokenValidator:
@@ -47,6 +57,20 @@ def override_token_validator(
         app.dependency_overrides,
         get_token_validator,
         lambda: validator,
+    )
+
+
+def override_database_session(
+    monkeypatch: pytest.MonkeyPatch,
+    session: AsyncSession,
+) -> None:
+    async def provide_session() -> AsyncIterator[AsyncSession]:
+        yield session
+
+    monkeypatch.setitem(
+        app.dependency_overrides,
+        get_db_session,
+        provide_session,
     )
 
 
@@ -128,6 +152,22 @@ def test_me_returns_200_with_verified_identity(
         claims=build_verified_claims(permissions_claim),
     )
     override_token_validator(monkeypatch, validator)
+    session = MagicMock(spec=AsyncSession)
+    override_database_session(monkeypatch, session)
+    current_user = User(
+        id=LOCAL_USER_ID,
+        auth0_sub="auth0|test-user",
+        email=None,
+        status=USER_STATUS_ACTIVE,
+        created_at=LOCAL_USER_CREATED_AT,
+        updated_at=LOCAL_USER_UPDATED_AT,
+    )
+    get_or_create_user = AsyncMock(return_value=current_user)
+    monkeypatch.setattr(
+        user_dependencies,
+        "get_or_create_user_by_auth0_sub",
+        get_or_create_user,
+    )
 
     response = client.get(
         "/api/v1/me",
@@ -141,11 +181,17 @@ def test_me_returns_200_with_verified_identity(
     assert response.headers["access-control-allow-origin"] == FRONTEND_ORIGIN
     assert response.json() == {
         "authenticated": True,
+        "id": str(LOCAL_USER_ID),
         "sub": "auth0|test-user",
+        "email": None,
+        "status": "active",
+        "created_at": "2026-08-30T09:15:30Z",
+        "updated_at": "2026-08-31T10:45:12Z",
         "permissions": expected_permissions,
         "message": "Access Token Auth0 valide",
     }
     assert validator.received_tokens == ["valid-test-token"]
+    get_or_create_user.assert_awaited_once_with(session, "auth0|test-user")
 
 
 def test_me_cors_preflight_allows_frontend_origin(client: TestClient) -> None:

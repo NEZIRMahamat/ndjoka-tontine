@@ -1,8 +1,8 @@
 # Infrastructure locale
 
-Ce dossier démarre uniquement PostgreSQL 17 pour le développement local. Le
-backend FastAPI et le frontend Vite continuent de s'exécuter directement sur
-la machine. FastAPI sera relié à cette base lors du ticket NDJ-15.
+Ce dossier démarre PostgreSQL 17 pour le développement local et, à la demande,
+une seconde instance éphémère réservée aux tests d'intégration. Le backend
+FastAPI et le frontend Vite continuent de s'exécuter directement sur la machine.
 
 ## Configuration
 
@@ -28,6 +28,38 @@ docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 
 Le service doit apparaître avec l'état `healthy` et la dernière commande doit
 retourner une version majeure `17`.
+
+## PostgreSQL éphémère pour les tests
+
+Le profil Compose `test` démarre une instance totalement séparée :
+
+```bash
+docker compose --profile test up -d postgres_test
+docker compose --profile test ps postgres_test
+```
+
+Elle écoute uniquement sur `127.0.0.1:5434`, utilise la base et le rôle
+`ndjoka_test`, et conserve ses données dans un `tmpfs`. Les identifiants fixes
+du service sont exclusivement locaux et ne doivent jamais être réutilisés dans
+un environnement distant.
+
+Depuis `backend/`, lancez ensuite :
+
+```bash
+TEST_DATABASE_URL=postgresql+asyncpg://ndjoka_test:ndjoka_test@127.0.0.1:5434/ndjoka_test \
+  uv run pytest -m integration -v
+```
+
+Pour arrêter et supprimer uniquement ce conteneur, sans toucher à PostgreSQL de
+développement :
+
+```bash
+docker compose --profile test stop postgres_test
+docker compose --profile test rm -f postgres_test
+```
+
+La suppression du conteneur efface son `tmpfs`. La base de développement, son
+conteneur `postgres` et le volume `postgres_data` ne sont pas concernés.
 
 Pour consulter les journaux :
 

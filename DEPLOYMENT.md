@@ -1,11 +1,12 @@
 # Premier déploiement de Ndjoka Tontine
 
-Cette procédure décrit le premier déploiement validé de l'application sur
-Vercel, Auth0 et Render. Elle couvre aussi le lancement local et les contrôles
-à effectuer après une nouvelle mise en ligne.
+Cette procédure décrit le déploiement de l'application sur Vercel, Auth0,
+Render Web Services et Render PostgreSQL. Elle couvre aussi le lancement local,
+les migrations Alembic et les contrôles à effectuer après une nouvelle mise en
+ligne.
 
-> État de référence validé le 28 août 2026. PostgreSQL n'est pas encore
-> utilisé par cette version.
+> État de référence NDJ-21 au 31 août 2026. La base distante est une instance
+> PostgreSQL 17 Free nommée `instance-postgres-ndjoka`.
 
 ## Architecture
 
@@ -15,18 +16,21 @@ flowchart LR
     frontend[React et Vite<br/>Vercel]
     auth[Auth0<br/>Universal Login]
     backend[FastAPI<br/>Render]
+    database[(PostgreSQL 17<br/>Render)]
 
     browser --> frontend
     frontend -->|Connexion| auth
     auth -->|Redirection après authentification| frontend
     frontend -->|Access Token Bearer<br/>GET /api/v1/me| backend
     backend -->|Clés publiques JWKS| auth
+    backend -->|SQLAlchemy asyncpg<br/>réseau privé Render| database
 ```
 
 Le navigateur charge le frontend statique depuis Vercel. Auth0 authentifie
 l'utilisateur et remet un Access Token destiné à la Custom API. Le frontend
 envoie ensuite ce token à FastAPI. Le backend vérifie sa signature RS256, son
-issuer, son audience et son expiration avant de répondre.
+issuer, son audience et son expiration, puis retrouve ou crée le profil Ndjoka
+dans PostgreSQL avant de répondre.
 
 ## URLs de référence
 
@@ -37,6 +41,7 @@ issuer, son audience et son expiration avant de répondre.
 | Documentation OpenAPI | `http://127.0.0.1:8000/docs` | `https://api-ndjoka-tontine.onrender.com/docs` |
 | Health check | `http://127.0.0.1:8000/api/v1/health` | `https://api-ndjoka-tontine.onrender.com/api/v1/health` |
 | Route protégée | `http://127.0.0.1:8000/api/v1/me` | `https://api-ndjoka-tontine.onrender.com/api/v1/me` |
+| PostgreSQL | `127.0.0.1:5433/ndjoka_db` | URL interne Render, secrète et non publique |
 
 L'audience Auth0 `https://api.ndjoka-tontine.com` est un identifiant logique.
 Ce n'est pas l'URL réseau du backend Render.
@@ -45,6 +50,7 @@ Ce n'est pas l'URL réseau du backend Render.
 
 - Python `3.13.12`, fixé dans `backend/.python-version` ;
 - [uv](https://docs.astral.sh/uv/) ;
+- Docker avec Compose pour PostgreSQL 17 local ;
 - Node.js `20.20.2` en local, fixé dans `frontend/.nvmrc` ;
 - npm 10 ou supérieur.
 
@@ -59,10 +65,13 @@ vérifications effectuées pendant ce premier déploiement.
 Depuis la racine du dépôt :
 
 ```bash
-cd backend
+cd infra
+docker compose up -d postgres
+cd ../backend
 # Exécuter la copie uniquement si .env.dev n'existe pas déjà.
 cp -n .env.example .env.dev
 uv sync
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
@@ -110,15 +119,19 @@ déploiements : il faut redéployer le frontend après la modification.
 
 ## Ordre de déploiement
 
-1. Déployer FastAPI sur Render et relever l'URL `onrender.com` réellement
-   attribuée.
-2. Configurer cette URL dans `VITE_API_BASE_URL`, puis déployer React sur
-   Vercel.
-3. Relever le domaine Vercel de production réellement attribué.
-4. Ajouter ce domaine dans les URLs autorisées de l'application Auth0.
-5. Ajouter ce même domaine dans `CORS_ALLOWED_ORIGINS` sur Render.
-6. Tester la connexion, la route protégée et la déconnexion depuis le domaine
-   Vercel stable.
+1. Créer PostgreSQL 17 sur Render dans le même environnement et la même région
+   que FastAPI.
+2. Appliquer les migrations Alembic avec l'URL externe, puis retirer l'accès
+   externe devenu inutile.
+3. Configurer l'URL interne de PostgreSQL dans `DATABASE_URL` sur le Web
+   Service FastAPI et déployer le backend.
+4. Relever l'URL `onrender.com` réellement attribuée et la configurer dans
+   `VITE_API_BASE_URL`, puis déployer React sur Vercel.
+5. Relever le domaine Vercel de production réellement attribué.
+6. Ajouter ce domaine dans les URLs autorisées de l'application Auth0 et dans
+   `CORS_ALLOWED_ORIGINS` sur Render.
+7. Tester la connexion, la création ou lecture du profil PostgreSQL et la
+   déconnexion depuis le domaine Vercel stable.
 
 ## Déploiement du backend sur Render
 
@@ -136,7 +149,23 @@ Créer un **Web Service** avec la configuration suivante :
 | Health Check Path | `/api/v1/health` |
 
 La version Python est fixée dans `backend/.python-version`. Render fournit la
-variable `PORT` ; elle ne doit pas être remplacée par un port fixe.
+variable `PORT` ; elle ne doit pas être remplacée par un port fixe. Sur l'offre
+Free, conserver Alembic hors des commandes Build et Start : une migration
+explicite évite de modifier la base à chaque build, redémarrage ou réveil.
+
+### PostgreSQL Render
+
+L'instance `instance-postgres-ndjoka` doit utiliser PostgreSQL 17 et se trouver
+dans le même workspace, le même environnement et la même région que le Web
+Service. Render fournit deux URLs différentes :
+
+- l'**External Database URL**, réservée aux migrations ponctuelles depuis un
+  poste autorisé ;
+- l'**Internal Database URL**, utilisée en permanence par FastAPI sur le réseau
+  privé Render.
+
+Ne jamais recopier l'une de ces URLs dans Git, une capture publique ou un
+ticket : elles contiennent les identifiants PostgreSQL.
 
 ### Variables Render
 
@@ -145,14 +174,54 @@ APP_ENV=prod
 AUTH0_DOMAIN=dev-rjei6nu4xfpxilgo.us.auth0.com
 AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
 CORS_ALLOWED_ORIGINS=["http://localhost:5173","https://ndjoka-tontine.vercel.app"]
+DATABASE_URL=<INTERNAL_DATABASE_URL_DE_INSTANCE_POSTGRES_NDJOKA>
 ```
 
 `AUTH0_DOMAIN` ne contient ni protocole ni barre finale. La valeur CORS est une
 liste JSON, pas une liste CSV. Aucun Client Secret Auth0 n'est nécessaire pour
-la validation d'un Access Token RS256.
+la validation d'un Access Token RS256. `DATABASE_URL` doit être la valeur
+**Internal Database URL** copiée depuis Render. Le code convertit
+automatiquement les schémas `postgres://` et `postgresql://` vers le pilote
+`asyncpg` ; il ne faut pas modifier manuellement la valeur dans le Dashboard.
 
 Après une modification de variable Render, enregistrer les changements et
 attendre la fin du nouveau déploiement avant de tester le CORS ou l'API.
+
+### Migration initiale sur l'offre Free
+
+Le Pre-Deploy Command Render est réservé aux services payants. Pour cette
+instance Free, appliquer la migration depuis `backend/` avec l'External
+Database URL. La commande `read -s` évite d'afficher le secret et de l'inscrire
+directement dans la ligne de commande :
+
+```zsh
+uv sync --locked
+read -s "DATABASE_URL?Collez l'External Database URL Render : "
+echo
+export DATABASE_URL
+uv run --no-sync alembic upgrade head
+uv run --no-sync alembic current
+uv run --no-sync alembic check
+unset DATABASE_URL
+```
+
+Résultats attendus :
+
+```text
+d94b607046b8 (head)
+No new upgrade operations detected.
+```
+
+L'URL externe Render peut contenir `sslmode=require`. La configuration la
+convertit en `ssl=require`, forme attendue par le dialecte SQLAlchemy
+`asyncpg`, sans exposer ni altérer le mot de passe.
+
+Autoriser uniquement l'adresse IP du poste pendant cette opération. Après la
+migration, retirer cet accès externe ou conserver une liste d'IP minimale.
+L'accès interne du Web Service n'est pas affecté. Pour chaque future migration,
+répéter cette procédure tant que le service reste Free. Après passage à une
+offre payante, exécuter `uv run --no-sync alembic upgrade head` dans le
+Pre-Deploy Command Render.
 
 ## Déploiement du frontend sur Vercel
 
@@ -267,9 +336,17 @@ Access-Control-Allow-Origin: https://ndjoka-tontine.vercel.app
 2. Cliquer sur **Se connecter**.
 3. Terminer l'authentification sur Universal Login Auth0.
 4. Vérifier le retour vers le domaine Vercel stable.
-5. Vérifier l'affichage **API protégée accessible** et du `sub` Auth0. Ce
-   message confirme que `GET /api/v1/me` a répondu avec succès.
-6. Cliquer sur **Se déconnecter** et vérifier le retour à l'état déconnecté.
+5. Vérifier l'affichage **API protégée accessible**, de l'UUID Ndjoka et du
+   `sub` Auth0. Ce message confirme que `GET /api/v1/me` a validé le token,
+   accédé à la table `users` et retrouvé ou créé le profil local.
+6. Actualiser la page et vérifier que le même UUID est retourné : aucune ligne
+   utilisateur supplémentaire ne doit être créée pour le même `sub`.
+7. Cliquer sur **Se déconnecter** et vérifier le retour à l'état déconnecté.
+
+Le health check `200` et le refus anonyme `401` ne suffisent pas à prouver la
+connexion PostgreSQL : le premier n'interroge pas la base et le second échoue
+avant l'ouverture d'une session. La réponse authentifiée de `/api/v1/me` est le
+contrôle fonctionnel distant de bout en bout.
 
 ## Limites de l'offre Render Free
 
@@ -290,8 +367,12 @@ Access-Control-Allow-Origin: https://ndjoka-tontine.vercel.app
 - Render peut redémarrer un service Free à tout moment. Cette offre convient à
   la démonstration et au développement, pas à une production exigeant une
   disponibilité constante.
-- Si PostgreSQL Free est ajouté ultérieurement sur Render, la base gratuite
-  expire actuellement après 30 jours et ne dispose pas de sauvegardes.
+- Une seule base PostgreSQL Free est disponible par workspace. Elle est limitée
+  à 1 Go, ne fournit ni sauvegardes ni pooling géré et expire après 30 jours.
+- L'instance `instance-postgres-ndjoka` affiche actuellement une expiration au
+  **24 septembre 2026**. Après expiration, Render accorde une période de grâce
+  limitée avant suppression ; les données de démonstration ne doivent pas être
+  considérées comme sauvegardées.
 
 ## Diagnostic rapide
 
@@ -301,6 +382,8 @@ Access-Control-Allow-Origin: https://ndjoka-tontine.vercel.app
 | `Failed to fetch` en local | FastAPI local arrêté | Lancer Uvicorn sur `127.0.0.1:8000` |
 | `Failed to fetch` sur Vercel | Render en veille ou origine CORS absente | Attendre le réveil, puis contrôler `CORS_ALLOWED_ORIGINS` |
 | `401 Unauthorized` avec un token | Audience, issuer, expiration ou signature invalide | Comparer les configurations Auth0 frontend et backend |
+| `/me` renvoie `500` après authentification | `DATABASE_URL` absente, URL externe utilisée sur le service ou migration non appliquée | Configurer l'URL interne, exécuter `alembic current`, puis redéployer |
+| `sslmode` est refusé par `asyncpg` | Ancienne version du code sans normalisation de l'URL externe | Déployer la version NDJ-21 puis relancer Alembic avec l'URL Render brute |
 | `404 NOT_FOUND` sur Vercel | Mauvaise branche ou mauvais Root Directory | Utiliser `develop` et `frontend` |
 | Variables Vercel ignorées | Déploiement antérieur au changement | Créer un nouveau déploiement de production |
 
@@ -310,6 +393,8 @@ Access-Control-Allow-Origin: https://ndjoka-tontine.vercel.app
 - Garder `.env.dev` et `.env.prod` hors de Git.
 - Ne jamais stocker d'Access Token, Client Secret, mot de passe ou clé privée
   dans le dépôt.
+- Conserver les URLs PostgreSQL uniquement dans les variables masquées Render
+  ou, le temps d'une migration, dans une variable de terminal ensuite supprimée.
 - Le backend valide les JWT avec les clés publiques JWKS ; il n'a pas besoin du
   Client Secret de l'application Auth0.
 - Les valeurs `VITE_*` sont publiques, même lorsqu'elles sont configurées dans
@@ -318,6 +403,8 @@ Access-Control-Allow-Origin: https://ndjoka-tontine.vercel.app
 ## Références officielles
 
 - [Render : Web Services](https://render.com/docs/web-services)
+- [Render : créer et connecter PostgreSQL](https://render.com/docs/postgresql-creating-connecting)
+- [Render : cycle des déploiements et Pre-Deploy Command](https://render.com/docs/deploys)
 - [Render : limites des services gratuits](https://render.com/docs/free)
 - [Vercel : déployer une application Vite](https://vercel.com/docs/frameworks/frontend/vite)
 - [Vercel : variables d'environnement](https://vercel.com/docs/environment-variables)

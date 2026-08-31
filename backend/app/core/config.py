@@ -10,6 +10,9 @@ from sqlalchemy.exc import ArgumentError
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SUPPORTED_ENVIRONMENTS = {"dev", "prod"}
+ASYNCPG_SSL_MODES = frozenset(
+    {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+)
 
 
 class CorsSettings(BaseSettings):
@@ -83,6 +86,37 @@ class DatabaseSettings(BaseSettings):
 
         if not database_url.host or not database_url.database:
             raise ValueError("DATABASE_URL doit contenir un hôte et une base")
+
+        normalized_query = database_url.normalized_query
+        ssl_query_keys = [key for key in ("sslmode", "ssl") if key in normalized_query]
+
+        if len(ssl_query_keys) > 1:
+            raise ValueError(
+                "DATABASE_URL ne doit pas combiner les paramètres sslmode et ssl"
+            )
+
+        if ssl_query_keys:
+            ssl_query_key = ssl_query_keys[0]
+            ssl_values = normalized_query[ssl_query_key]
+
+            if len(ssl_values) != 1:
+                raise ValueError(
+                    f"DATABASE_URL ne doit contenir qu'un paramètre {ssl_query_key}"
+                )
+
+            ssl_mode = ssl_values[0].strip().lower()
+            if ssl_mode not in ASYNCPG_SSL_MODES:
+                allowed_modes = ", ".join(sorted(ASYNCPG_SSL_MODES))
+                raise ValueError(
+                    "Le mode SSL de DATABASE_URL doit être l'une des valeurs "
+                    f"suivantes : {allowed_modes}"
+                )
+
+            database_url = database_url.difference_update_query([ssl_query_key])
+            database_url = database_url.update_query_dict(
+                {"ssl": ssl_mode},
+                append=False,
+            )
 
         return SecretStr(database_url.render_as_string(hide_password=False))
 

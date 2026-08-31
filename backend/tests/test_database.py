@@ -80,6 +80,54 @@ def test_database_settings_normalizes_render_url(scheme: str) -> None:
     )
 
 
+def test_database_settings_normalizes_render_external_sslmode() -> None:
+    settings = DatabaseSettings(
+        database_url=(
+            "postgresql://ndjoka:secret@db.example.com/ndjoka?sslmode=require"
+        ),
+    )
+
+    assert settings.database_url.get_secret_value() == (
+        "postgresql+asyncpg://ndjoka:secret@db.example.com/ndjoka?ssl=require"
+    )
+
+
+def test_render_external_url_passes_ssl_to_asyncpg() -> None:
+    settings = DatabaseSettings(
+        database_url=(
+            "postgresql://ndjoka:secret@db.example.com/ndjoka?sslmode=require"
+        ),
+    )
+    engine = database_session.build_async_engine(
+        settings.database_url.get_secret_value()
+    )
+
+    try:
+        _, connect_args = engine.dialect.create_connect_args(engine.url)
+    finally:
+        asyncio.run(engine.dispose())
+
+    assert connect_args["ssl"] == "require"
+    assert "sslmode" not in connect_args
+
+
+@pytest.mark.parametrize(
+    "ssl_query",
+    [
+        "sslmode=invalid",
+        "sslmode=require&sslmode=verify-full",
+        "sslmode=require&ssl=verify-full",
+    ],
+)
+def test_database_settings_rejects_invalid_ssl_query(ssl_query: str) -> None:
+    with pytest.raises(ValidationError, match="DATABASE_URL|mode SSL"):
+        DatabaseSettings(
+            database_url=(
+                "postgresql://ndjoka:secret@db.example.com/ndjoka?" + ssl_query
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     "database_url",
     [

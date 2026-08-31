@@ -1,3 +1,6 @@
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -14,9 +17,14 @@ class TokenPayload(BaseModel):
 
 
 class CurrentUserResponse(BaseModel):
-    """Réponse temporaire représentant l'utilisateur Auth0 connecté."""
+    """Identité Auth0 et profil local de l'utilisateur Ndjoka connecté."""
 
     authenticated: bool = True
+    id: UUID
     sub: str
+    email: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
     permissions: list[str] = Field(default_factory=list)
     message: str
