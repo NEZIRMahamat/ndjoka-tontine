@@ -1,6 +1,3 @@
-from datetime import datetime
-from uuid import UUID
-
 from pydantic import BaseModel, Field
 
 
@@ -14,17 +11,4 @@ class TokenPayload(BaseModel):
     iat: int
     scope: str | None = None
     permissions: list[str] = Field(default_factory=list)
-
-
-class CurrentUserResponse(BaseModel):
-    """Identité Auth0 et profil local de l'utilisateur Ndjoka connecté."""
-
-    authenticated: bool = True
-    id: UUID
-    sub: str
-    email: str | None = None
-    status: str
-    created_at: datetime
-    updated_at: datetime
-    permissions: list[str] = Field(default_factory=list)
-    message: str
+    email: str | None = Field(default=None, min_length=1, max_length=255)

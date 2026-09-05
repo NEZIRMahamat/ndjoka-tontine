@@ -1,9 +1,9 @@
 # Backend Ndjoka Tontine
 
-Backend FastAPI de Ndjoka Tontine. Il expose les routes publiques de base et la
-route protégée `/api/v1/me`, adossée au validateur des Access Tokens Auth0 et
-au profil utilisateur conservé dans PostgreSQL. La couche PostgreSQL asynchrone
-est utilisée par cette route pour retrouver ou créer l'utilisateur local.
+Backend FastAPI de Ndjoka Tontine, version 0.2.0. Il valide les Access Tokens
+Auth0, provisionne les profils locaux dans PostgreSQL et applique les statuts
+et rôles globaux de la plateforme. Auth0 reste responsable de
+l'authentification ; PostgreSQL conserve les données métier du profil.
 
 ## Prérequis
 
@@ -12,6 +12,11 @@ est utilisée par cette route pour retrouver ou créer l'utilisateur local.
 - PostgreSQL 17 démarré depuis `../infra/`
 
 ## Installation
+
+Initialisez d'abord `../infra/.env` à partir de `../infra/.env.example`, adaptez
+`POSTGRES_PASSWORD`, puis démarrez PostgreSQL comme indiqué dans
+`../infra/README.md`. La valeur utilisée dans `DATABASE_URL` doit contenir le
+même mot de passe.
 
 Depuis le dossier `backend/` :
 
@@ -32,15 +37,18 @@ L'API est alors disponible sur `http://127.0.0.1:8000` :
 
 - `GET /` présente l'API ;
 - `GET /api/v1/health` vérifie son état ;
-- `GET /api/v1/me` retourne l'identité Auth0, les permissions du token et le
-  profil PostgreSQL du porteur d'un Access Token valide ;
+- `GET /api/v1/me` retourne le profil PostgreSQL courant ;
+- `PATCH /api/v1/me` modifie les champs éditables du profil ;
+- `POST /api/v1/me/deactivate` désactive logiquement le compte courant ;
+- `/api/v1/admin/users` expose la consultation et l'administration des
+  utilisateurs selon le rôle global ;
 - `GET /docs` ouvre la documentation interactive OpenAPI.
 
 ## Vérifications
 
 ```bash
 uv run pytest -m "not integration"
-uv run ruff check .
+uv run ruff check app tests
 uv run ruff format --check .
 ```
 
@@ -76,14 +84,16 @@ Complétez `.env.dev` à partir de `.env.example` :
 ```dotenv
 AUTH0_DOMAIN=your-tenant.eu.auth0.com
 AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
-CORS_ALLOWED_ORIGINS=["http://localhost:5173","https://ndjoka-tontine.vercel.app"]
+CORS_ALLOWED_ORIGINS=["http://localhost:5173","https://app.ndjoka-tontine.com"]
 DATABASE_URL=postgresql+asyncpg://ndjoka_postgres_admin:change-me-for-local-development@127.0.0.1:5433/ndjoka_db
 ```
 
 `AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
 correspondre exactement à l'Identifier de la Custom API Auth0.
 Les origines CORS sont une liste JSON explicite ; n'utilisez pas `*` pour une
-route recevant un Bearer Token.
+route recevant un Bearer Token. Le middleware accepte `GET`, `PATCH`, `POST`
+et les en-têtes `Authorization` et `Content-Type`, y compris leurs requêtes
+préliminaires `OPTIONS`.
 
 Le backend charge `.env.dev` par défaut. Pour sélectionner `.env.prod`, lancez
 le processus avec `APP_ENV=prod`. Les variables système restent prioritaires,
@@ -117,7 +127,7 @@ Health Check Path: /api/v1/health
 Render fournit dynamiquement la variable `PORT`. Configurez aussi dans le
 service `APP_ENV=prod`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` et
 `CORS_ALLOWED_ORIGINS`. Cette dernière doit rester une liste JSON et contenir le
-domaine Vercel réellement attribué au projet. Ne configurez aucun Client Secret
+domaine public personnalisé du frontend. Ne configurez aucun Client Secret
 Auth0 pour cette API. Ajoutez enfin :
 
 ```text
@@ -142,8 +152,9 @@ uv run --no-sync alembic check
 unset DATABASE_URL
 ```
 
-Pour NDJ-21, `alembic current` doit afficher `d94b607046b8 (head)` et
-`alembic check` doit indiquer qu'aucune nouvelle opération n'est détectée.
+Pour la version 0.2.0, `alembic current` doit afficher
+`3b9f4c2a7d11 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
+opération n'est détectée.
 Retirez ensuite l'accès réseau externe devenu inutile, configurez l'URL interne
 dans le Web Service et redéployez. La procédure distante complète et les
 limites de l'offre Free sont détaillées dans `../DEPLOYMENT.md`.
@@ -161,24 +172,58 @@ Le validateur vérifie :
 Les tests génèrent leurs propres clés RSA et leurs JWT en mémoire. Ils ne
 contactent jamais le tenant Auth0.
 
-## Liaison avec l'utilisateur local
+## Utilisateurs, statuts et rôles
 
-Le module `app/modules/users/` sait désormais relier le claim `sub` d'un token
-Auth0 validé à une ligne PostgreSQL :
+Le contrat détaillé du module est versionné dans
+[`app/modules/users/README.md`](app/modules/users/README.md). Les principes à
+retenir sont :
 
-- la recherche conserve le `sub` exact, sans le découper ni le normaliser ;
-- une identité inconnue crée un utilisateur `active` avec un e-mail encore nul ;
-- `auth0_sub` reste la seule identité canonique et unique ;
+- `auth0_sub` est l'identité canonique, unique, exacte et immuable ;
+- une identité inconnue crée un utilisateur `active` avec le rôle `user` ;
+- l'e-mail est synchronisé depuis Auth0 lorsque l'Access Token expose le claim
+  `email`, mais aucune route de profil ne permet de le modifier ;
 - `INSERT ... ON CONFLICT DO NOTHING` empêche les doublons lors de deux
   premières connexions simultanées ;
-- une reconnexion ne modifie ni l'e-mail ni le statut métier existants.
+- les mots de passe, tokens et secrets Auth0 ne sont jamais stockés localement ;
+- un compte `suspended` ou `deactivated` reçoit `403` sur les routes
+  authentifiées, même avec un JWT valide.
 
-La dépendance `get_current_ndjoka_user` compose le token validé et la session
-SQLAlchemy. La route `/api/v1/me` l'utilise : à la première requête authentifiée,
-elle crée l'utilisateur local si nécessaire, puis retourne son UUID, son
-`auth0_sub` sous le nom `sub`, son e-mail éventuel, son statut et ses timestamps.
-Les permissions restent issues de l'Access Token validé et aucun mot de passe
-Auth0 n'est stocké dans PostgreSQL.
+Les champs de profil éditables par leur propriétaire sont `display_name`,
+`avatar_url`, `locale` et `timezone`. Les valeurs initiales sont `fr` et
+`Europe/Paris`. La désactivation personnelle est logique et renseigne
+`deactivated_at` sans supprimer la ligne. Une réactivation administrative
+conserve cette date comme historique ; chaque nouvelle désactivation la met à
+jour.
+
+Les rôles globaux ont une portée limitée :
+
+- `user` gère son propre profil ;
+- `support` peut aussi consulter les utilisateurs et leur liste paginée ;
+- `platform_admin` peut en plus modifier le statut ou le rôle global d'un
+  autre utilisateur ; sa propre modification administrative est refusée.
+
+Les rôles propres aux tontines ne font pas partie de ce module. Le profil
+exclut également le téléphone, les données KYC, bancaires et de paiement.
+
+## Contrat HTTP utilisateurs
+
+| Méthode et route | Accès | Résultat |
+| --- | --- | --- |
+| `GET /api/v1/me` | Compte actif | Profil courant complet |
+| `PATCH /api/v1/me` | Compte actif | Mise à jour des seuls champs éditables |
+| `POST /api/v1/me/deactivate` | Compte actif | Désactivation logique du compte courant |
+| `GET /api/v1/admin/users` | `support`, `platform_admin` | Liste paginée et filtrable |
+| `GET /api/v1/admin/users/{user_id}` | `support`, `platform_admin` | Détail d'un utilisateur |
+| `PATCH /api/v1/admin/users/{user_id}/status` | `platform_admin` | Changement de statut |
+| `PATCH /api/v1/admin/users/{user_id}/role` | `platform_admin` | Changement de rôle global |
+
+La liste utilise `limit` (1 à 100, défaut 50) et `offset` (minimum 0, défaut 0),
+ainsi que les filtres query optionnels `status` et `global_role`. Elle retourne
+`items`, `total`, `limit` et `offset`. Les erreurs suivent le contrat suivant :
+`401` sans authentification valide, `403` pour un compte bloqué, un rôle
+insuffisant ou une tentative de modifier administrativement son propre compte,
+`404` pour un UUID utilisateur inconnu et `422` pour une charge utile ou un
+paramètre invalide.
 
 ## Migrations de schéma
 
@@ -196,10 +241,19 @@ La configuration utilise `DATABASE_URL` et `Base.metadata`, sans conserver
 d'identifiant dans `alembic.ini`. Elle crée une connexion asynchrone dédiée à
 chaque exécution, distincte du moteur de l'application.
 
-La première migration crée la table locale `users` avec un UUID, l'identifiant
-canonique `auth0_sub`, un e-mail optionnel, un statut et des timestamps. Elle ne
-contient aucun secret d'authentification : Auth0 reste responsable des mots de
-passe et des facteurs d'authentification. Pour une future évolution du schéma :
+La première migration crée la table locale `users`. La révision Sprint 1
+`3b9f4c2a7d11` ajoute le profil, le rôle global et la désactivation logique.
+Elle convertit `pending` en `suspended` et `closed` en `deactivated`, puis
+installe les contraintes correspondant aux valeurs du contrat v0.2.0. Aucune
+migration ne contient de secret d'authentification : Auth0 reste responsable
+des mots de passe et des facteurs d'authentification.
+
+Après la migration et la première connexion du mainteneur, le premier
+`platform_admin` doit être désigné explicitement par son `auth0_sub` exact.
+Cette opération ponctuelle est détaillée dans `../DEPLOYMENT.md` et doit
+afficher `UPDATE 1`. Ne jamais attribuer ce rôle à partir d'un e-mail seul.
+
+Pour une future évolution du schéma :
 
 ```bash
 uv run alembic revision --autogenerate -m "description de la migration"
