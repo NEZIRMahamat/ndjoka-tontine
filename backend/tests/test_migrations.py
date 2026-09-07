@@ -32,7 +32,7 @@ def test_alembic_structure_is_configured_without_credentials() -> None:
     assert (ALEMBIC_DIRECTORY / "script.py.mako").is_file()
     assert (ALEMBIC_DIRECTORY / "versions").is_dir()
     assert config.get_main_option("sqlalchemy.url") is None
-    assert scripts.get_current_head() == "3b9f4c2a7d11"
+    assert scripts.get_current_head() == "b81e6c3d4f20"
 
 
 def test_alembic_offline_environment_uses_database_url(
@@ -69,3 +69,12 @@ def test_alembic_offline_environment_uses_database_url(
     assert "WHERE status = 'pending'" in upgrade_sql
     assert "SET status = 'deactivated'" in upgrade_sql
     assert "WHERE status = 'closed'" in upgrade_sql
+    assert "CREATE TABLE tontines" in upgrade_sql
+    assert "REFERENCES users (id) ON DELETE RESTRICT" in upgrade_sql
+    assert "CREATE INDEX ix_tontines_creator_created_id" in upgrade_sql
+    assert "CREATE TABLE memberships" in upgrade_sql
+    assert "CREATE TABLE invitations" in upgrade_sql
+    assert "INSERT INTO memberships" in upgrade_sql
+    assert "uq_memberships_one_active_owner" in upgrade_sql
+    assert "uq_invitations_pending_email" in upgrade_sql
+    assert "token_hash VARCHAR(64) NOT NULL" in upgrade_sql

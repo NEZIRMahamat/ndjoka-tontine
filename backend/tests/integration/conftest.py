@@ -73,8 +73,8 @@ def upgrade_test_database(database_url: str) -> None:
         get_database_settings.cache_clear()
 
 
-async def truncate_users(database_url: str) -> None:
-    """Nettoyer uniquement la table de l'instance de test validée."""
+async def truncate_test_data(database_url: str) -> None:
+    """Nettoyer les données métier de l'instance de test validée."""
     engine = create_async_engine(database_url, poolclass=NullPool)
     try:
         async with engine.begin() as connection:
@@ -92,9 +92,9 @@ def migrated_test_database_url() -> str:
 
 @pytest.fixture
 def test_database_url(migrated_test_database_url: str) -> Iterator[str]:
-    """Garantir une table users vide avant et après chaque scénario."""
-    asyncio.run(truncate_users(migrated_test_database_url))
+    """Garantir des tables métier vides avant et après chaque scénario."""
+    asyncio.run(truncate_test_data(migrated_test_database_url))
     try:
         yield migrated_test_database_url
     finally:
-        asyncio.run(truncate_users(migrated_test_database_url))
+        asyncio.run(truncate_test_data(migrated_test_database_url))

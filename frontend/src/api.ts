@@ -5,7 +5,7 @@ export type CurrentUserResponse = {
   message: string
 }
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '')
     .trim()
     .replace(/\/+$/, '')

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 
 import { getCurrentUser, type CurrentUserResponse } from './api.ts'
+import ndjokaLogo from './assets/ndjoka_logo.svg'
+import TontinesPage from './TontinesPage'
 
 type ApiState =
   | { status: 'idle' }
@@ -29,13 +31,14 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
     arrow: 'M5 12h14M13 6l6 6-6 6',
     logout: 'M10 17l5-5-5-5M15 12H3M21 19V5a2 2 0 0 0-2-2h-5',
+    chevron: 'M9 18l6-6-6-6',
   }
 
   return <svg aria-hidden="true" className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name]} /></svg>
 }
 
 function Brand() {
-  return <div className="brand"><span className="brand-mark">N</span><span><strong>Ndjoka</strong><small>TONTINE DIGITALE</small></span></div>
+  return <div className="brand"><img src={ndjokaLogo} alt="Ndjoka" /></div>
 }
 
 const formatName = (value?: string) => value?.split(' ')[0] || value || 'membre'
@@ -54,6 +57,7 @@ function App() {
   const [apiRequestId, setApiRequestId] = useState(0)
   const [view, setView] = useState<View>('dashboard')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -156,8 +160,8 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar"><Brand /><nav className="side-nav" aria-label="Navigation principale">{navigation.map((item) => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}<button className="nav-item nav-ai" onClick={() => setView('dashboard')}><Icon name="spark" /><span>Ndjoka AI</span><small>Bientôt</small></button></nav><div className="sidebar-bottom"><button className="nav-item" onClick={() => setView('profile')}><Icon name="user" /><span>Mon profil</span></button><button className="nav-item logout" onClick={handleLogout}><Icon name="logout" /><span>Se déconnecter</span></button></div></aside>
-      <main className="app-main"><header className="topbar"><div><span className="mobile-brand"><Brand /></span><span className="page-kicker">Espace membre</span><h1>{pageTitles[view]}</h1></div><div className="topbar-actions"><button className="icon-button" aria-label="Notifications"><Icon name="bell" /><i /></button><div className="profile-wrap"><button className="profile-trigger" onClick={() => setProfileOpen(!profileOpen)}><img src={user?.picture} alt="" /><span><strong>{displayName}</strong><small>Membre vérifié</small></span><b>⌄</b></button>{profileOpen && <div className="profile-menu"><button onClick={() => { setView('profile'); setProfileOpen(false) }}><Icon name="user" /> Mon profil</button><button onClick={handleLogout}><Icon name="logout" /> Se déconnecter</button></div>}</div></div></header><div className="page-content">{view === 'dashboard' ? <Dashboard firstName={firstName} apiState={apiState} retryApiCall={retryApiCall} onView={setView} /> : <Placeholder view={view} onView={setView} />}</div></main>
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}><div className="sidebar-head"><Brand /><button className="sidebar-toggle" type="button" aria-label={sidebarCollapsed ? 'Déplier le menu' : 'Plier le menu'} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? 'Déplier le menu' : 'Plier le menu'} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}><Icon name="chevron" /></button></div><nav className="side-nav" aria-label="Navigation principale">{navigation.map((item) => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} onClick={() => setView(item.id)}><Icon name={item.icon} /><span>{item.label}</span></button>)}<button className="nav-item nav-ai" onClick={() => setView('dashboard')}><Icon name="spark" /><span>Ndjoka AI</span><small>Bientôt</small></button></nav><div className="sidebar-bottom"><button className="nav-item" onClick={() => setView('profile')}><Icon name="user" /><span>Mon profil</span></button><button className="nav-item logout" onClick={handleLogout}><Icon name="logout" /><span>Se déconnecter</span></button></div></aside>
+      <main className="app-main"><header className="topbar"><div><span className="mobile-brand"><Brand /></span><span className="page-kicker">Espace membre</span><h1>{pageTitles[view]}</h1></div><div className="topbar-actions"><button className="icon-button" aria-label="Notifications"><Icon name="bell" /><i /></button><div className="profile-wrap"><button className="profile-trigger" onClick={() => setProfileOpen(!profileOpen)}><img src={user?.picture} alt="" /><span><strong>{displayName}</strong><small>Membre vérifié</small></span><b>⌄</b></button>{profileOpen && <div className="profile-menu"><button onClick={() => { setView('profile'); setProfileOpen(false) }}><Icon name="user" /> Mon profil</button><button onClick={handleLogout}><Icon name="logout" /> Se déconnecter</button></div>}</div></div></header><div className="page-content">{view === 'dashboard' ? <Dashboard firstName={firstName} apiState={apiState} retryApiCall={retryApiCall} onView={setView} /> : view === 'tontines' ? <TontinesPage key={user?.sub} /> : <Placeholder view={view} onView={setView} />}</div></main>
     </div>
   )
 }

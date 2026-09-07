@@ -1,6 +1,6 @@
 # Backend Ndjoka Tontine
 
-Backend FastAPI de Ndjoka Tontine, version 0.2.0. Il valide les Access Tokens
+Backend FastAPI de Ndjoka Tontine, version 0.4.0. Il valide les Access Tokens
 Auth0, provisionne les profils locaux dans PostgreSQL et applique les statuts
 et rôles globaux de la plateforme. Auth0 reste responsable de
 l'authentification ; PostgreSQL conserve les données métier du profil.
@@ -42,6 +42,18 @@ L'API est alors disponible sur `http://127.0.0.1:8000` :
 - `POST /api/v1/me/deactivate` désactive logiquement le compte courant ;
 - `/api/v1/admin/users` expose la consultation et l'administration des
   utilisateurs selon le rôle global ;
+- `POST /api/v1/tontines` crée une tontine en brouillon ;
+- `GET /api/v1/tontines` et `GET /api/v1/tontines/{tontine_id}` consultent
+  les tontines auxquelles le compte appartient activement ;
+- `PATCH /api/v1/tontines/{tontine_id}` modifie une tontine non archivée ;
+- `POST /api/v1/tontines/{tontine_id}/archive` l'archive logiquement ;
+- les routes `/api/v1/tontines/{tontine_id}/invitations` créent, listent et
+  révoquent les invitations selon le rôle interne ;
+- `POST /api/v1/invitations/accept` accepte un token d'invitation ;
+- les routes `/api/v1/tontines/{tontine_id}/members` listent les adhésions,
+  changent les rôles et gèrent départs et retraits ;
+- `POST /api/v1/tontines/{tontine_id}/ownership-transfer` transfère la
+  propriété de manière atomique ;
 - `GET /docs` ouvre la documentation interactive OpenAPI.
 
 ## Vérifications
@@ -71,8 +83,8 @@ TEST_DATABASE_URL=postgresql+asyncpg://ndjoka_test:ndjoka_test@127.0.0.1:5434/nd
   uv run pytest -v
 ```
 
-La fixture applique `alembic upgrade head`, puis vide uniquement la table
-`users` de la base de test avant et après chaque scénario. Par sécurité, elle
+La fixture applique `alembic upgrade head`, puis vide les données métier de la
+base de test avant et après chaque scénario. Par sécurité, elle
 refuse toute URL qui ne cible pas exactement l'utilisateur et la base
 `ndjoka_test` sur une adresse locale et le port `5434`. Sans
 `TEST_DATABASE_URL`, les tests marqués `integration` sont simplement ignorés.
@@ -152,8 +164,8 @@ uv run --no-sync alembic check
 unset DATABASE_URL
 ```
 
-Pour la version 0.2.0, `alembic current` doit afficher
-`3b9f4c2a7d11 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
+Pour la version 0.4.0, `alembic current` doit afficher
+`b81e6c3d4f20 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
 opération n'est détectée.
 Retirez ensuite l'accès réseau externe devenu inutile, configurez l'URL interne
 dans le Web Service et redéployez. La procédure distante complète et les
@@ -202,8 +214,8 @@ Les rôles globaux ont une portée limitée :
 - `platform_admin` peut en plus modifier le statut ou le rôle global d'un
   autre utilisateur ; sa propre modification administrative est refusée.
 
-Les rôles propres aux tontines ne font pas partie de ce module. Le profil
-exclut également le téléphone, les données KYC, bancaires et de paiement.
+Les rôles propres aux tontines sont gérés séparément par le module Memberships.
+Le profil exclut le téléphone, les données KYC, bancaires et de paiement.
 
 ## Contrat HTTP utilisateurs
 
@@ -224,6 +236,14 @@ ainsi que les filtres query optionnels `status` et `global_role`. Elle retourne
 insuffisant ou une tentative de modifier administrativement son propre compte,
 `404` pour un UUID utilisateur inconnu et `422` pour une charge utile ou un
 paramètre invalide.
+
+## Tontines
+
+Le contrat détaillé est versionné dans
+[`app/modules/tontines/README.md`](app/modules/tontines/README.md). Une tontine
+est créée en `draft` avec une adhésion `owner`; une archive reste consultable
+mais en lecture seule. Le contrat des rôles, invitations et adhésions est dans
+[`app/modules/memberships/README.md`](app/modules/memberships/README.md).
 
 ## Migrations de schéma
 
@@ -247,6 +267,11 @@ Elle convertit `pending` en `suspended` et `closed` en `deactivated`, puis
 installe les contraintes correspondant aux valeurs du contrat v0.2.0. Aucune
 migration ne contient de secret d'authentification : Auth0 reste responsable
 des mots de passe et des facteurs d'authentification.
+
+La révision Sprint 2 `7c2a91e4b630` crée `tontines`. La révision Sprint 3
+`b81e6c3d4f20` crée `memberships` et `invitations`, installe leurs contraintes
+et index, puis donne automatiquement le rôle `owner` aux créateurs de toutes
+les tontines déjà présentes. Elle ne crée aucun cycle ni paiement.
 
 Après la migration et la première connexion du mainteneur, le premier
 `platform_admin` doit être désigné explicitement par son `auth0_sub` exact.

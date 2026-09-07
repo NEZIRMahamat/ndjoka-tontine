@@ -1,0 +1,19 @@
+.tontines-page { display: grid; gap: 24px; }
+.tontine-create, .tontine-list { padding: 24px; min-width: 0; }
+.tontine-create h2, .tontine-list h2 { margin-top: 0; }
+.tontine-create fieldset { border: 0; padding: 0; margin: 20px 0 0; display: grid; gap: 16px; min-width: 0; }
+.tontine-create label { display: grid; gap: 8px; font-size: 14px; }
+.tontine-create input, .tontine-create textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #aebbb5; border-radius: 8px; font: inherit; background: white; color: #193d30; }
+.tontine-create input:focus-visible, .tontine-create textarea:focus-visible { outline: 2px solid #157044; outline-offset: 2px; }
+.tontine-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tontine-create .button { justify-self: start; }
+.tontines-page button:disabled { opacity: .6; cursor: not-allowed; }
+.tontine-error { color: #ad2424; }
+.owned-tontines { list-style: none; padding: 0; display: grid; gap: 16px; }
+.owned-tontines li { padding: 16px; border: 1px solid #dbe5df; border-radius: 12px; overflow-wrap: anywhere; }
+.owned-tontines h3 { margin: 0; }
+.tontine-badge { background: #e9f4ed; border-radius: 16px; padding: 5px 12px; font-size: 13px; }
+.tontine-description { white-space: pre-wrap; }
+.tontine-pagination { display: flex; gap: 16px; align-items: center; justify-content: center; }
+.tontine-pagination button { padding: 8px 12px; }
+@media (max-width: 600px) { .tontine-form-row { grid-template-columns: 1fr; } .tontine-create, .tontine-list { padding: 16px; } }
