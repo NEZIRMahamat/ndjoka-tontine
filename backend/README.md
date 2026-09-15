@@ -1,6 +1,6 @@
 # Backend Ndjoka Tontine
 
-Backend FastAPI de Ndjoka Tontine, version 0.4.0. Il valide les Access Tokens
+Backend FastAPI de Ndjoka Tontine, version 0.7.0. Il valide les Access Tokens
 Auth0, provisionne les profils locaux dans PostgreSQL et applique les statuts
 et rôles globaux de la plateforme. Auth0 reste responsable de
 l'authentification ; PostgreSQL conserve les données métier du profil.
@@ -54,6 +54,11 @@ L'API est alors disponible sur `http://127.0.0.1:8000` :
   changent les rôles et gèrent départs et retraits ;
 - `POST /api/v1/tontines/{tontine_id}/ownership-transfer` transfère la
   propriété de manière atomique ;
+- les routes `/api/v1/tontines/{tontine_id}/cycles` créent et consultent les
+  cycles, génèrent les tours et contrôlent leurs transitions ;
+- `GET /api/v1/me/contributions` expose l'échéancier personnel ; les routes
+  `/api/v1/contributions/{contribution_id}` déclarent, confirment ou rejettent
+  les obligations, sans paiement réel ;
 - `GET /docs` ouvre la documentation interactive OpenAPI.
 
 ## Vérifications
@@ -103,7 +108,7 @@ DATABASE_URL=postgresql+asyncpg://ndjoka_postgres_admin:change-me-for-local-deve
 `AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
 correspondre exactement à l'Identifier de la Custom API Auth0.
 Les origines CORS sont une liste JSON explicite ; n'utilisez pas `*` pour une
-route recevant un Bearer Token. Le middleware accepte `GET`, `PATCH`, `POST`
+route recevant un Bearer Token. Le middleware accepte `GET`, `PATCH`, `POST`, `PUT`
 et les en-têtes `Authorization` et `Content-Type`, y compris leurs requêtes
 préliminaires `OPTIONS`.
 
@@ -117,13 +122,13 @@ RS256. Le backend récupère uniquement les clés publiques JWKS d'Auth0.
 `DATABASE_URL` utilise le pilote asynchrone `asyncpg`. Les caractères spéciaux
 du mot de passe doivent être encodés dans l'URL. La configuration de la base,
 le moteur et la fabrique de sessions sont chargés paresseusement : les routes
-publiques restent disponibles même si PostgreSQL n'est pas encore configuré
-sur Render, mais `/api/v1/me` exige désormais la base. Les écritures doivent
+publiques restent disponibles même si PostgreSQL n'est pas encore configuré,
+mais `/api/v1/me` exige désormais la base. Les écritures doivent
 valider explicitement leur transaction ; la dépendance de session n'effectue
-aucun commit automatique. Les schémas Render `postgres://` et `postgresql://`
-sont convertis automatiquement en `postgresql+asyncpg://`. Pour une connexion
-externe, `sslmode=<mode>` est également converti en `ssl=<mode>`, paramètre
-attendu par SQLAlchemy avec `asyncpg`.
+aucun commit automatique. Les schémas `postgres://` et `postgresql://` sont
+convertis automatiquement en `postgresql+asyncpg://`. Le paramètre
+`sslmode=<mode>` est également converti en `ssl=<mode>`, attendu par SQLAlchemy
+avec `asyncpg`.
 
 ## Préparation Render
 
@@ -143,29 +148,20 @@ domaine public personnalisé du frontend. Ne configurez aucun Client Secret
 Auth0 pour cette API. Ajoutez enfin :
 
 ```text
-DATABASE_URL=<Internal Database URL de instance-postgres-ndjoka>
+DATABASE_URL=postgresql+asyncpg://<utilisateur>:<mot-de-passe-encode>@<hote-rds>:5432/ndjoka_db?ssl=require
 ```
 
-Le Web Service et PostgreSQL doivent être dans la même région. Utilisez l'URL
-interne Render pour l'application ; l'URL externe, plus exposée et plus lente,
-est réservée à une migration ponctuelle depuis un poste autorisé.
+Utilisez l'endpoint RDS indiqué dans AWS et conservez TLS avec `ssl=require`.
+Le Security Group de RDS doit autoriser le port `5432` depuis Render pour le
+backend et depuis votre IP publique pour les migrations ponctuelles.
 
-Le Pre-Deploy Command n'est pas disponible sur le Web Service Free. Ne placez
-pas Alembic dans les commandes Build ou Start : depuis `backend/`, appliquez
-chaque migration avec l'External Database URL saisie sans affichage :
+Ne placez pas Alembic dans les commandes Build ou Start pour un usage courant :
+les migrations RDS sont appliquées explicitement depuis le poste local, avec
+`backend/.env.prod` et `APP_ENV=prod`. La procédure complète est documentée
+dans [`../infra/README.md`](../infra/README.md#migrer-postgresql-aws-rds-avec-alembic).
 
-```zsh
-read -s "DATABASE_URL?Collez l'External Database URL Render : "
-echo
-export DATABASE_URL
-uv run --no-sync alembic upgrade head
-uv run --no-sync alembic current
-uv run --no-sync alembic check
-unset DATABASE_URL
-```
-
-Pour la version 0.4.0, `alembic current` doit afficher
-`b81e6c3d4f20 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
+Pour la version 0.7.0, `alembic current` doit afficher
+`e64ca02b8d39 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
 opération n'est détectée.
 Retirez ensuite l'accès réseau externe devenu inutile, configurez l'URL interne
 dans le Web Service et redéployez. La procédure distante complète et les
@@ -244,11 +240,20 @@ Le contrat détaillé est versionné dans
 est créée en `draft` avec une adhésion `owner`; une archive reste consultable
 mais en lecture seule. Le contrat des rôles, invitations et adhésions est dans
 [`app/modules/memberships/README.md`](app/modules/memberships/README.md).
+Les contrats des Sprints 4 et 5 sont documentés dans
+[`app/modules/cycles/README.md`](app/modules/cycles/README.md) et
+[`app/modules/contributions/README.md`](app/modules/contributions/README.md).
+Le Sprint 6 (backend uniquement) est documenté dans le
+[contrat Versements](app/modules/payouts/README.md). Il expose douze endpoints
+pour générer, consulter, approuver, déclarer, recevoir, contester et annuler
+les versements manuels ; voir aussi [la validation](SPRINT_6_VALIDATION.md).
 
 ## Migrations de schéma
 
-Alembic est l'unique mécanisme de modification du schéma PostgreSQL. Depuis
-`backend/`, les commandes courantes sont :
+Alembic est l'unique mécanisme de modification du schéma PostgreSQL. Sans
+`APP_ENV`, les commandes ciblent par défaut PostgreSQL Docker local via
+`.env.dev` (voir `../infra/README.md`). Depuis `backend/`, les commandes
+courantes sont :
 
 ```bash
 uv run alembic current
@@ -271,7 +276,12 @@ des mots de passe et des facteurs d'authentification.
 La révision Sprint 2 `7c2a91e4b630` crée `tontines`. La révision Sprint 3
 `b81e6c3d4f20` crée `memberships` et `invitations`, installe leurs contraintes
 et index, puis donne automatiquement le rôle `owner` aux créateurs de toutes
-les tontines déjà présentes. Elle ne crée aucun cycle ni paiement.
+les tontines déjà présentes. La révision Sprint 4 `c42a8e0f6b17` crée les
+cycles et tours. La révision Sprint 5 `d53b9f1a7c28` crée les obligations de
+cotisation déclaratives. Aucune de ces migrations ne réalise de paiement.
+La révision Sprint 6 `e64ca02b8d39` crée `payouts`, ses contraintes financières
+et ses clés étrangères composites. Pour un cycle actif antérieur au Sprint 6,
+un owner ou manager peut appeler `POST .../cycles/{cycle_id}/payouts/generate`.
 
 Après la migration et la première connexion du mainteneur, le premier
 `platform_admin` doit être désigné explicitement par son `auth0_sub` exact.

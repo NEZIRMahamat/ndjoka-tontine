@@ -256,7 +256,7 @@ def test_all_routes_require_token(client):
 
 def test_openapi_documents_all_tontine_operations(client):
     schema = client.get("/openapi.json").json()
-    assert schema["info"]["version"] == "0.4.0"
+    assert schema["info"]["version"] == "0.7.0"
     expected_operations = {
         "/api/v1/tontines": {"get", "post"},
         "/api/v1/tontines/{tontine_id}": {"get", "patch"},

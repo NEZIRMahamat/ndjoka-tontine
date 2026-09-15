@@ -7,14 +7,14 @@ from app.core.config import get_cors_settings
 app = FastAPI(
     title="Ndjoka Tontine API",
     description="API Ndjoka - Plateforme de tontine digitale",
-    version="0.4.0",
+    version="0.7.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_settings().cors_allowed_origins,
     allow_credentials=False,
-    allow_methods=["GET", "PATCH", "POST"],
+    allow_methods=["GET", "PATCH", "POST", "PUT"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -24,7 +24,7 @@ async def read_root() -> dict[str, str]:
     """Réponse minimale confirmant que l'API est accessible."""
     return {
         "description": "Ndjoka Tontine API",
-        "version": "0.4.0",
+        "version": "0.7.0",
         "documentation": "/docs",
     }
 

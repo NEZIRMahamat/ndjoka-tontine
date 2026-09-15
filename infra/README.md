@@ -3,7 +3,7 @@
 Ce dossier démarre PostgreSQL 17 pour le développement local et, à la demande,
 une seconde instance éphémère réservée aux tests d'intégration. Le backend
 FastAPI et le frontend Vite continuent de s'exécuter directement sur la machine.
-Il documente également la base PostgreSQL gérée sur Render et l'application de
+Il documente également la base PostgreSQL gérée sur AWS RDS et l'application de
 ses migrations Alembic. Le fichier Compose reste exclusivement local : il ne
 doit pas être déployé sur Render.
 
@@ -80,48 +80,66 @@ Les données sont persistées dans le volume Docker `postgres_data`. La commande
 `docker compose down -v` supprime définitivement ce volume et ne doit être
 utilisée que pour réinitialiser volontairement la base locale.
 
-## Déployer PostgreSQL sur Render
+## Déployer PostgreSQL sur AWS RDS
 
-Créez une instance PostgreSQL gérée dans le même workspace, le même
-environnement et la même région Render que le Web Service FastAPI. Utilisez
-PostgreSQL 17 et conservez le nom de base et le rôle générés par Render. Les
-identifiants du fichier local `infra/.env` ne sont pas réutilisés en production.
+Utilisez une instance RDS PostgreSQL dans une région proche de l'hébergement du
+backend. Les identifiants du fichier local `infra/.env` ne sont pas réutilisés
+en production.
 
-Render fournit deux URL ayant des usages différents :
-
-- l'**Internal Database URL** relie FastAPI à PostgreSQL sur le réseau privé
-  Render ;
-- l'**External Database URL** permet une connexion ponctuelle depuis un poste
-  autorisé, notamment pour exécuter Alembic.
-
+Configurez le Security Group RDS pour autoriser TCP `5432` depuis le backend
+Render et, temporairement, depuis votre IP publique afin d'exécuter Alembic.
 Dans les variables d'environnement du Web Service FastAPI, configurez :
 
 ```dotenv
-DATABASE_URL=<INTERNAL_DATABASE_URL_FOURNIE_PAR_RENDER>
+DATABASE_URL=postgresql+asyncpg://<utilisateur>:<mot-de-passe-encode>@<hote-rds>:5432/ndjoka_db?ssl=require
 ```
 
-Copiez directement la valeur fournie par Render. Le backend accepte les
-schémas `postgres://` et `postgresql://`, les convertit vers
-`postgresql+asyncpg://` et adapte le paramètre `sslmode` pour `asyncpg`. Ne
-placez jamais cette URL dans `.env.example`, Git, une capture d'écran ou un
+Le backend accepte les schémas `postgres://` et `postgresql://`, les convertit
+vers `postgresql+asyncpg://` et adapte le paramètre `sslmode` pour `asyncpg`.
+Ne placez jamais cette URL dans `.env.example`, Git, une capture d'écran ou un
 ticket : elle contient les identifiants de la base.
 
-## Migrer PostgreSQL Render avec Alembic
+## Migrer PostgreSQL AWS RDS avec Alembic
 
-Sur l'offre gratuite, les migrations sont lancées explicitement depuis le
-poste local avec l'**External Database URL**. Une commande Alembic lancée sans
-cette URL utilise normalement `backend/.env.dev` et migre donc PostgreSQL
-Docker local, pas Render.
+Les migrations sont lancées explicitement depuis le poste local. Une commande
+Alembic lancée sans configuration explicite de
+l'environnement utilise `backend/.env.dev` et migre donc PostgreSQL Docker
+local, pas RDS.
 
 Avant la migration, poussez et synchronisez la version du code contenant les
 nouvelles révisions Alembic. Autorisez temporairement l'adresse IP du poste si
-la configuration réseau Render le demande. Depuis la racine du dépôt, sous
-zsh :
+la configuration réseau Render le demande.
+
+### Méthode principale : `APP_ENV=prod`
+
+`backend/.env.prod` contient déjà l'URL RDS dans `DATABASE_URL`. Il suffit donc
+de sélectionner cet environnement. Depuis `backend/`, sous zsh :
+
+```zsh
+uv sync --locked
+
+nc -vz <hote-rds> 5432
+
+export APP_ENV=prod
+uv run --no-sync alembic current
+uv run --no-sync alembic upgrade head
+uv run --no-sync alembic current
+uv run --no-sync alembic check
+unset APP_ENV
+```
+
+La commande `nc -vz` vérifie au préalable que le poste atteint bien le port
+PostgreSQL RDS avant de lancer Alembic. Si elle reste bloquée ou affiche un
+timeout, vérifiez la route réseau et le Security Group RDS.
+
+### Méthode de secours : saisie manuelle de l'URL
+
+Si `backend/.env.prod` n'est pas disponible sur le poste, ou pour cibler une
+URL différente sans modifier ce fichier, saisissez-la sans qu'elle soit
+affichée ni inscrite dans l'historique du terminal :
 
 ```zsh
 cd backend
-uv sync --locked
-
 read -s "DATABASE_URL?Collez l'External Database URL Render : "
 echo
 export DATABASE_URL
@@ -138,10 +156,31 @@ ligne de commande. Il ne faut pas remplacer le texte de la question par l'URL :
 exécutez d'abord `read -s`, collez l'URL lorsque le terminal la demande, puis
 appuyez sur Entrée.
 
-Pour la version `0.2.0`, `alembic current` doit afficher :
+### Méthode de secours : accès externe indisponible
+
+Si `nc -vz` échoue durablement depuis le poste (accès externe bloqué), lancez
+la migration une seule fois via le Start Command du Web Service Render, qui
+utilise l'Internal Database URL sur le réseau privé Render :
+
+```bash
+uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Déclenchez un déploiement manuel, vérifiez dans les logs que les révisions
+s'appliquent jusqu'à la tête attendue, puis restaurez immédiatement le Start
+Command habituel :
+
+```bash
+uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+Cette méthode reste ponctuelle : ne laissez pas Alembic dans la commande de
+démarrage de façon permanente.
+
+Pour la version `0.7.0`, `alembic current` doit afficher :
 
 ```text
-3b9f4c2a7d11 (head)
+e64ca02b8d39 (head)
 ```
 
 `alembic check` doit ensuite afficher :
@@ -149,6 +188,13 @@ Pour la version `0.2.0`, `alembic current` doit afficher :
 ```text
 No new upgrade operations detected.
 ```
+
+Cette tête inclut `c42a8e0f6b17` (cycles et tours), puis `d53b9f1a7c28`
+(cotisations), puis `e64ca02b8d39` (versements manuels du Sprint 6).
+La migration ne génère pas les versements des anciens cycles : après
+redéploiement, un owner/manager utilise `POST .../cycles/{cycle_id}/payouts/generate`
+pour les cycles actifs ou terminés. Voir le
+[contrat Sprint 6](../backend/app/modules/payouts/README.md).
 
 Si l'une des commandes échoue, ne redéployez pas le backend avant d'avoir
 identifié la cause. N'exécutez jamais `alembic downgrade`, ne supprimez aucune

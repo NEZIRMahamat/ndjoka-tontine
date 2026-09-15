@@ -32,7 +32,7 @@ def test_alembic_structure_is_configured_without_credentials() -> None:
     assert (ALEMBIC_DIRECTORY / "script.py.mako").is_file()
     assert (ALEMBIC_DIRECTORY / "versions").is_dir()
     assert config.get_main_option("sqlalchemy.url") is None
-    assert scripts.get_current_head() == "b81e6c3d4f20"
+    assert scripts.get_current_head() == "e64ca02b8d39"
 
 
 def test_alembic_offline_environment_uses_database_url(
@@ -78,3 +78,19 @@ def test_alembic_offline_environment_uses_database_url(
     assert "uq_memberships_one_active_owner" in upgrade_sql
     assert "uq_invitations_pending_email" in upgrade_sql
     assert "token_hash VARCHAR(64) NOT NULL" in upgrade_sql
+    assert "CREATE TABLE cycles" in upgrade_sql
+    assert "CREATE TABLE cycle_turns" in upgrade_sql
+    assert "contribution_amount NUMERIC(18, 2) NOT NULL" in upgrade_sql
+    assert "beneficiary_contributes BOOLEAN DEFAULT true NOT NULL" in upgrade_sql
+    assert "uq_cycles_one_active_per_tontine" in upgrade_sql
+    assert "uq_cycle_turns_cycle_beneficiary" in upgrade_sql
+    assert "CREATE TABLE contributions" in upgrade_sql
+    assert "amount_due NUMERIC(18, 2) NOT NULL" in upgrade_sql
+    assert "uq_contributions_turn_membership" in upgrade_sql
+    assert "ck_contributions_declaration_consistency" in upgrade_sql
+    assert "CREATE TABLE payouts" in upgrade_sql
+    assert "uq_payouts_turn" in upgrade_sql
+    assert "fk_payouts_turn_beneficiary" in upgrade_sql
+    assert upgrade_sql.index("uq_turns_id_cycle_beneficiary") < upgrade_sql.index(
+        "CREATE TABLE payouts"
+    )

@@ -140,7 +140,7 @@ def test_openapi_documents_sprint_3_routes():
             schema = client.get("/openapi.json").json()
     finally:
         app.dependency_overrides.clear()
-    assert schema["info"]["version"] == "0.4.0"
+    assert schema["info"]["version"] == "0.7.0"
     expected = {
         "/api/v1/tontines/{tontine_id}/invitations": {"get", "post"},
         "/api/v1/tontines/{tontine_id}/invitations/{invitation_id}/revoke": {"post"},
