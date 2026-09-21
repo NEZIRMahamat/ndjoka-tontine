@@ -1,0 +1,2 @@
+Un cycle vient d'être activé dans « $tontine_name ».
+Consulter : $action_url

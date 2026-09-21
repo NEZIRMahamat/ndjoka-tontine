@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.contributions import repositories
 from app.modules.contributions.enums import (
     ContributionStatus,
@@ -19,6 +20,8 @@ from app.modules.cycles.enums import CycleStatus
 from app.modules.cycles.models import Cycle
 from app.modules.memberships.enums import MembershipRole
 from app.modules.memberships.models import Membership
+from app.modules.notifications.service import action_key, enqueue_event, recipient
+from app.modules.tontines.models import Tontine
 from app.modules.users.models import User
 
 FINANCIAL_ROLES = {
@@ -173,6 +176,7 @@ async def declare_contribution(
             )
         if item.status not in {ContributionStatus.PENDING, ContributionStatus.REJECTED}:
             raise ContributionError("Cette cotisation ne peut pas être déclarée", 409)
+        old_status = item.status
         item.status = ContributionStatus.DECLARED
         item.declared_at = datetime.now(UTC)
         item.declaration_reference = payload.declaration_reference
@@ -180,6 +184,16 @@ async def declare_contribution(
         item.rejected_at = None
         item.rejected_by_user_id = None
         item.rejection_reason = None
+        await record(
+            session,
+            event_name="contribution.declared",
+            actor_user_id=actor.id,
+            subject_user_id=actor.id,
+            tontine_id=membership.tontine_id,
+            resource_type="contribution",
+            resource_id=item.id,
+            changes={"status": change(old_status, item.status)},
+        )
         await session.commit()
         await session.refresh(item)
         return item
@@ -201,6 +215,7 @@ async def confirm_contribution(
             raise ContributionError(
                 "Seule une cotisation déclarée peut être confirmée", 409
             )
+        old_status = item.status
         item.status = ContributionStatus.CONFIRMED
         item.confirmed_at = datetime.now(UTC)
         item.confirmed_by_user_id = actor.id
@@ -209,6 +224,17 @@ async def confirm_contribution(
 
         cycle = await repositories.cycle_for_contribution(session, item)
         await refresh_for_turn(session, cycle, item.turn_id)
+        target = await session.get(Membership, item.membership_id)
+        await record(
+            session,
+            event_name="contribution.confirmed",
+            actor_user_id=actor.id,
+            subject_user_id=target.user_id,
+            tontine_id=membership.tontine_id,
+            resource_type="contribution",
+            resource_id=item.id,
+            changes={"status": change(old_status, item.status)},
+        )
         await session.commit()
         await session.refresh(item)
         return item
@@ -233,11 +259,36 @@ async def reject_contribution(
             raise ContributionError(
                 "Seule une cotisation déclarée peut être rejetée", 409
             )
+        old_status = item.status
         item.status = ContributionStatus.REJECTED
         item.rejected_at = datetime.now(UTC)
         item.rejected_by_user_id = actor.id
         item.rejection_reason = payload.reason
         item.declared_at = None
+        target = await session.get(Membership, item.membership_id)
+        await record(
+            session,
+            event_name="contribution.rejected",
+            actor_user_id=actor.id,
+            subject_user_id=target.user_id,
+            tontine_id=membership.tontine_id,
+            resource_type="contribution",
+            resource_id=item.id,
+            changes={"status": change(old_status, item.status)},
+        )
+        target_user = await session.get(User, target.user_id)
+        tontine = await session.get(Tontine, membership.tontine_id)
+        await enqueue_event(
+            session,
+            event_name="contribution.rejected",
+            aggregate_type="contribution",
+            aggregate_id=item.id,
+            tontine_id=membership.tontine_id,
+            recipients=[recipient(target_user)],
+            template_context={"tontine_name": tontine.name},
+            action_path=f"/tontines/{membership.tontine_id}/contributions",
+            deduplication_key=action_key(f"contribution:{item.id}:rejected"),
+        )
         await session.commit()
         await session.refresh(item)
         return item

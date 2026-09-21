@@ -7,12 +7,8 @@ TOOLS_DEFINITIONS = [
         "function": {
             "name": "get_user_balance",
             "description": "Récupère le solde actuel du compte de l'utilisateur.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
     },
     {
         "type": "function",
@@ -24,15 +20,16 @@ TOOLS_DEFINITIONS = [
                 "properties": {
                     "monthly_budget": {
                         "type": "number",
-                        "description": "Montant mensuel que l'utilisateur souhaite épargner ou investir (en EUR/XAF)."
+                        "description": "Montant mensuel que l'utilisateur souhaite épargner ou investir (en EUR/XAF).",
                     }
                 },
-                "required": ["monthly_budget"]
-            }
-        }
+                "required": ["monthly_budget"],
+            },
+        },
     },
-    ...
+    ...,
 ]
+
 
 # 2. Exécution réelle des fonctions (interroge ta base PostgreSQL)
 async def execute_tool(tool_name: str, arguments: dict, user_id: str) -> str:
@@ -46,8 +43,20 @@ async def execute_tool(tool_name: str, arguments: dict, user_id: str) -> str:
         budget = arguments.get("monthly_budget", 0)
         # Remplace par ta requête de tontines compatibles
         tontines = [
-            {"id": "t-1", "name": "Tontine Diaspora Solidaire", "contribution": 100, "frequence": "mensuelle", "places_restantes": 3},
-            {"id": "t-2", "name": "Tontine Épargne Express", "contribution": min(budget, 200), "frequence": "mensuelle", "places_restantes": 1}
+            {
+                "id": "t-1",
+                "name": "Tontine Diaspora Solidaire",
+                "contribution": 100,
+                "frequence": "mensuelle",
+                "places_restantes": 3,
+            },
+            {
+                "id": "t-2",
+                "name": "Tontine Épargne Express",
+                "contribution": min(budget, 200),
+                "frequence": "mensuelle",
+                "places_restantes": 1,
+            },
         ]
         return json.dumps({"status": "success", "results": tontines})
 

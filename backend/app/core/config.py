@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -121,6 +121,55 @@ class DatabaseSettings(BaseSettings):
         return SecretStr(database_url.render_as_string(hide_password=False))
 
 
+class EmailSettings(BaseSettings):
+    """Configuration transactionnelle sans exposer les secrets du fournisseur."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    email_provider: str = "console"
+    email_from_name: str = "Ndjoka Tontine"
+    email_from_address: str = "notifications@ndjoka-tontine.com"
+    email_contact_address: str = "contact@ndjoka-tontine.com"
+    email_reply_to: str = ""
+    frontend_base_url: str = "http://localhost:5173"
+    resend_api_key: SecretStr = SecretStr("")
+    resend_webhook_secret: SecretStr = SecretStr("")
+
+    @field_validator("email_provider")
+    @classmethod
+    def validate_provider(cls, value: str) -> str:
+        provider = value.strip().lower()
+        if provider not in {"console", "resend"}:
+            raise ValueError("EMAIL_PROVIDER doit valoir console ou resend")
+        return provider
+
+    @field_validator("email_from_name", "email_from_address", "email_contact_address")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Le nom et l'adresse d'expédition sont obligatoires")
+        return value.strip()
+
+    @field_validator("frontend_base_url")
+    @classmethod
+    def validate_frontend_url(cls, value: str) -> str:
+        parsed = urlsplit(value.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("FRONTEND_BASE_URL doit être une URL HTTP(S)")
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}"
+
+    @model_validator(mode="after")
+    def validate_resend_key(self):
+        if (
+            self.email_provider == "resend"
+            and not self.resend_api_key.get_secret_value()
+        ):
+            raise ValueError(
+                "RESEND_API_KEY est obligatoire avec EMAIL_PROVIDER=resend"
+            )
+        return self
+
+
 class Settings(BaseSettings):
     """Configuration du backend fournie par l'environnement d'exécution."""
 
@@ -188,6 +237,14 @@ def get_cors_settings() -> CorsSettings:
 def get_database_settings() -> DatabaseSettings:
     """Charger la configuration PostgreSQL uniquement lorsqu'elle est requise."""
     return DatabaseSettings(
+        _env_file=get_environment_file(),
+        _env_file_encoding="utf-8",
+    )
+
+
+@lru_cache
+def get_email_settings() -> EmailSettings:
+    return EmailSettings(
         _env_file=get_environment_file(),
         _env_file_encoding="utf-8",
     )

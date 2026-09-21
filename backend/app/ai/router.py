@@ -1,6 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Dict
+
 from app.ai.agent_guardrail import check_moderation
 from app.ai.agent_ndjoka import run_ndjoka_agent
 
@@ -8,11 +8,14 @@ from app.ai.agent_ndjoka import run_ndjoka_agent
 
 router = APIRouter(prefix="/api/v1/ai", tags=["Ndjoka AI"])
 
+
 class ChatRequest(BaseModel):
-    messages: List[Dict[str, str]]  # Format [{"role": "user", "content": "..."}]
+    messages: list[dict[str, str]]  # Format [{"role": "user", "content": "..."}]
+
 
 class ChatResponse(BaseModel):
     reply: str
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(
@@ -26,7 +29,8 @@ async def chat_with_agent(
     moderation = await check_moderation(last_user_message)
     if not moderation.get("is_allowed", False):
         return ChatResponse(
-            reply=moderation.get("refusal_message") or "Je ne peux répondre qu'aux questions relatives à Ndjoka Tontine et vos finances."
+            reply=moderation.get("refusal_message")
+            or "Je ne peux répondre qu'aux questions relatives à Ndjoka Tontine et vos finances."
         )
 
     # 2. Étape Agent Principal (70B)

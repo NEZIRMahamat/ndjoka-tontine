@@ -6,12 +6,14 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.cycles import repositories
 from app.modules.cycles.enums import CycleFrequency, CycleStatus
 from app.modules.cycles.models import Cycle, CycleTurn
 from app.modules.cycles.schemas import CycleCreate, CycleUpdate, TurnOrderUpdate
 from app.modules.memberships.enums import MembershipRole
 from app.modules.memberships.models import Membership
+from app.modules.notifications.service import enqueue_event, tontine_recipients
 from app.modules.tontines.enums import TontineStatus
 from app.modules.tontines.models import Tontine
 from app.modules.users.models import User
@@ -89,6 +91,23 @@ async def create_cycle(
             **payload.model_dump(),
         )
         await repositories.insert_cycle(session, cycle)
+        await record(
+            session,
+            event_name="cycle.created",
+            actor_user_id=actor.id,
+            subject_user_id=actor.id,
+            tontine_id=tontine.id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={
+                "sequence_number": {"to": cycle.sequence_number},
+                "status": {"to": cycle.status.value},
+                "contribution_amount": {"to": cycle.contribution_amount},
+                "frequency": {"to": cycle.frequency.value},
+                "start_date": {"to": cycle.start_date},
+                "beneficiary_contributes": {"to": cycle.beneficiary_contributes},
+            },
+        )
         await session.commit()
         return await get_cycle(session, tontine.id, cycle.id)
     except IntegrityError as exc:
@@ -126,11 +145,27 @@ async def update_cycle(
         calendar_changed = bool(
             {"frequency", "start_date", "timezone"} & changes.keys()
         )
+        audit_changes = {
+            field: change(getattr(cycle, field), value)
+            for field, value in changes.items()
+            if getattr(cycle, field) != value
+        }
         for field, value in changes.items():
             setattr(cycle, field, value)
         if calendar_changed and cycle.turns:
             for turn in cycle.turns:
                 turn.scheduled_for = scheduled_datetime(cycle, turn.position)
+        if audit_changes:
+            await record(
+                session,
+                event_name="cycle.updated",
+                actor_user_id=membership.user_id,
+                subject_user_id=membership.user_id,
+                tontine_id=tontine_id,
+                resource_type="cycle",
+                resource_id=cycle.id,
+                changes=audit_changes,
+            )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:
@@ -168,6 +203,15 @@ async def generate_turns(
         if not active:
             raise CycleError("Aucun membre actif pour générer le calendrier", 409)
         await replace_turns(session, cycle, active)
+        await record(
+            session,
+            event_name="cycle.turns_generated",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={"turn_count": {"to": len(active)}},
+        )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:
@@ -194,8 +238,20 @@ async def reorder_turns(
                 "L'ordre doit contenir exactement tous les membres actifs de la tontine",
                 409,
             )
+        old_order = [turn.beneficiary_membership_id for turn in cycle.turns]
         await replace_turns(
             session, cycle, [by_id[item_id] for item_id in payload.membership_ids]
+        )
+        await record(
+            session,
+            event_name="cycle.order_updated",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={
+                "beneficiary_membership_ids": change(old_order, payload.membership_ids)
+            },
         )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
@@ -223,7 +279,17 @@ async def schedule_cycle(
         cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
         require_draft(cycle)
         await ensure_complete_order(session, cycle)
+        old_status = cycle.status
         cycle.status = CycleStatus.SCHEDULED
+        await record(
+            session,
+            event_name="cycle.scheduled",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={"status": change(old_status, cycle.status)},
+        )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:
@@ -246,6 +312,7 @@ async def activate_cycle(
         await ensure_complete_order(session, cycle)
         if await repositories.has_other_active_cycle(session, tontine_id, cycle_id):
             raise CycleError("Un autre cycle est déjà actif pour cette tontine", 409)
+        old_status = cycle.status
         cycle.status = CycleStatus.ACTIVE
         cycle.activated_at = datetime.now(UTC)
         if tontine.status == TontineStatus.DRAFT:
@@ -256,6 +323,26 @@ async def activate_cycle(
         from app.modules.payouts.services import generate_for_cycle as generate_payouts
 
         await generate_payouts(session, cycle)
+        await record(
+            session,
+            event_name="cycle.activated",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={"status": change(old_status, cycle.status)},
+        )
+        await enqueue_event(
+            session,
+            event_name="cycle.activated",
+            aggregate_type="cycle",
+            aggregate_id=cycle.id,
+            tontine_id=tontine_id,
+            recipients=await tontine_recipients(session, tontine_id),
+            template_context={"tontine_name": tontine.name},
+            action_path=f"/tontines/{tontine_id}/cycles/{cycle.id}",
+            deduplication_key=f"cycle:{cycle.id}:activated",
+        )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except IntegrityError as exc:
@@ -277,8 +364,18 @@ async def complete_cycle(
         cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
         if cycle.status != CycleStatus.ACTIVE:
             raise CycleError("Seul un cycle actif peut être terminé", 409)
+        old_status = cycle.status
         cycle.status = CycleStatus.COMPLETED
         cycle.completed_at = datetime.now(UTC)
+        await record(
+            session,
+            event_name="cycle.completed",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={"status": change(old_status, cycle.status)},
+        )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:
@@ -299,6 +396,7 @@ async def cancel_cycle(
             CycleStatus.ACTIVE,
         }:
             raise CycleError("Ce cycle ne peut plus être annulé", 409)
+        old_status = cycle.status
         cycle.status = CycleStatus.CANCELLED
         cycle.cancelled_at = datetime.now(UTC)
         from app.modules.contributions.services import cancel_unconfirmed_for_cycle
@@ -307,6 +405,27 @@ async def cancel_cycle(
         from app.modules.payouts.services import cancel_for_cycle
 
         await cancel_for_cycle(session, cycle.id)
+        await record(
+            session,
+            event_name="cycle.cancelled",
+            actor_user_id=membership.user_id,
+            tontine_id=tontine_id,
+            resource_type="cycle",
+            resource_id=cycle.id,
+            changes={"status": change(old_status, cycle.status)},
+        )
+        tontine = await session.get(Tontine, tontine_id)
+        await enqueue_event(
+            session,
+            event_name="cycle.cancelled",
+            aggregate_type="cycle",
+            aggregate_id=cycle.id,
+            tontine_id=tontine_id,
+            recipients=await tontine_recipients(session, tontine_id),
+            template_context={"tontine_name": tontine.name},
+            action_path=f"/tontines/{tontine_id}/cycles/{cycle.id}",
+            deduplication_key=f"cycle:{cycle.id}:cancelled",
+        )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:

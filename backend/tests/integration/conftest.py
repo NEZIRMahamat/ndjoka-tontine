@@ -78,7 +78,9 @@ async def truncate_test_data(database_url: str) -> None:
     engine = create_async_engine(database_url, poolclass=NullPool)
     try:
         async with engine.begin() as connection:
-            await connection.exec_driver_sql("TRUNCATE TABLE users CASCADE")
+            await connection.exec_driver_sql(
+                "TRUNCATE TABLE users, outbox_events, resend_webhook_events CASCADE"
+            )
     finally:
         await engine.dispose()
 

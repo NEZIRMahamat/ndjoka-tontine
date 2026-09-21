@@ -1,0 +1,2 @@
+Votre rôle dans « $tontine_name » est désormais $role.
+Consulter : $action_url

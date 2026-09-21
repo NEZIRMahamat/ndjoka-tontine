@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.memberships.repositories import insert_membership
@@ -70,6 +71,21 @@ async def create_tontine(
                 status=MembershipStatus.ACTIVE,
             ),
         )
+        await record(
+            session,
+            event_name="tontine.created",
+            actor_user_id=actor.id,
+            subject_user_id=actor.id,
+            tontine_id=tontine.id,
+            resource_type="tontine",
+            resource_id=tontine.id,
+            changes={
+                "name": {"to": tontine.name},
+                "currency": {"to": tontine.currency},
+                "max_members": {"to": tontine.max_members},
+                "status": {"to": tontine.status.value},
+            },
+        )
         await session.commit()
         await session.refresh(tontine)
         return tontine
@@ -95,8 +111,27 @@ async def update_tontine(
             raise TontineError(
                 "La devise ne peut plus être modifiée après activation", 409
             )
+        audit_changes = {}
         for field, value in changes.items():
+            old_value = getattr(tontine, field)
+            if old_value != value:
+                audit_changes[field] = (
+                    change(old_value is not None, value is not None)
+                    if field == "description"
+                    else change(old_value, value)
+                )
             setattr(tontine, field, value)
+        if audit_changes:
+            await record(
+                session,
+                event_name="tontine.updated",
+                actor_user_id=actor.id,
+                subject_user_id=actor.id,
+                tontine_id=tontine.id,
+                resource_type="tontine",
+                resource_id=tontine.id,
+                changes=audit_changes,
+            )
         await session.commit()
         await session.refresh(tontine)
         return tontine
@@ -111,8 +146,19 @@ async def archive_tontine(
     try:
         tontine = await get_tontine(session, actor, tontine_id, lock=True)
         if tontine.status != TontineStatus.ARCHIVED:
+            old_status = tontine.status
             tontine.status = TontineStatus.ARCHIVED
             tontine.archived_at = datetime.now(UTC)
+            await record(
+                session,
+                event_name="tontine.archived",
+                actor_user_id=actor.id,
+                subject_user_id=actor.id,
+                tontine_id=tontine.id,
+                resource_type="tontine",
+                resource_id=tontine.id,
+                changes={"status": change(old_status, tontine.status)},
+            )
         await session.commit()
         await session.refresh(tontine)
         return tontine

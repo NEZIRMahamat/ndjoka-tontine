@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.users.enums import GlobalRole, UserStatus
 from app.modules.users.models import AUTH0_SUB_MAX_LENGTH, User
 from app.modules.users.repositories import (
@@ -99,8 +100,23 @@ async def update_user_profile(
         raise ValueError("Au moins un champ de profil doit être fourni")
 
     try:
+        audit_changes = {
+            field_name: change(getattr(user, field_name), value)
+            for field_name, value in changes.items()
+            if getattr(user, field_name) != value
+        }
         for field_name, value in changes.items():
             setattr(user, field_name, value)
+        if audit_changes:
+            await record(
+                session,
+                event_name="user.profile_updated",
+                actor_user_id=user.id,
+                subject_user_id=user.id,
+                resource_type="user",
+                resource_id=user.id,
+                changes=audit_changes,
+            )
         await session.commit()
         await session.refresh(user)
         return user
@@ -115,8 +131,18 @@ async def deactivate_user(
 ) -> User:
     """Désactiver logiquement le compte courant sans supprimer ses données."""
     try:
+        old_status = user.status
         user.status = UserStatus.DEACTIVATED
         user.deactivated_at = datetime.now(UTC)
+        await record(
+            session,
+            event_name="user.deactivated",
+            actor_user_id=user.id,
+            subject_user_id=user.id,
+            resource_type="user",
+            resource_id=user.id,
+            changes={"status": change(old_status, user.status)},
+        )
         await session.commit()
         await session.refresh(user)
         return user
@@ -191,9 +217,19 @@ async def update_user_status(
         return target
 
     try:
+        old_status = target.status
         target.status = new_status
         if new_status == UserStatus.DEACTIVATED:
             target.deactivated_at = datetime.now(UTC)
+        await record(
+            session,
+            event_name="user.status_changed",
+            actor_user_id=actor.id,
+            subject_user_id=target.id,
+            resource_type="user",
+            resource_id=target.id,
+            changes={"status": change(old_status, new_status)},
+        )
         await session.commit()
         await session.refresh(target)
         return target
@@ -216,7 +252,17 @@ async def update_user_global_role(
         return target
 
     try:
+        old_role = target.global_role
         target.global_role = new_role
+        await record(
+            session,
+            event_name="user.global_role_changed",
+            actor_user_id=actor.id,
+            subject_user_id=target.id,
+            resource_type="user",
+            resource_id=target.id,
+            changes={"global_role": change(old_role, new_role)},
+        )
         await session.commit()
         await session.refresh(target)
         return target

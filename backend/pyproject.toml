@@ -1,6 +1,6 @@
 [project]
 name = "ndjoka-tontine-backend"
-version = "0.7.0"
+version = "0.9.0"
 description = "API FastAPI de la plateforme de tontine digitale Ndjoka"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,6 +14,8 @@ dependencies = [
     "psycopg[binary]>=3.2,<4.0",
     "sqlalchemy[asyncio]>=2.0,<2.1",
     "uvicorn[standard]>=0.35,<1.0",
+    "httpx>=0.28,<1.0",
+    "svix>=1.75,<2.0",
 ]
 
 [dependency-groups]

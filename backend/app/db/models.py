@@ -9,9 +9,16 @@ from app.db.base import Base
 
 def load_all_models() -> tuple[type[Base], ...]:
     """Importer et retourner tous les modèles déclaratifs connus."""
+    from app.modules.audit.models import AuditEvent
     from app.modules.contributions.models import Contribution
     from app.modules.cycles.models import Cycle, CycleTurn
     from app.modules.memberships.models import Invitation, Membership
+    from app.modules.notifications.models import (
+        EmailDelivery,
+        Notification,
+        OutboxEvent,
+        ResendWebhookEvent,
+    )
     from app.modules.payouts.models import Payout
     from app.modules.tontines.models import Tontine
     from app.modules.users.models import User
@@ -25,4 +32,9 @@ def load_all_models() -> tuple[type[Base], ...]:
         CycleTurn,
         Contribution,
         Payout,
+        AuditEvent,
+        Notification,
+        OutboxEvent,
+        EmailDelivery,
+        ResendWebhookEvent,
     )

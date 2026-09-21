@@ -133,7 +133,10 @@ def test_readiness_checks_exact_obligations(monkeypatch, case, ready):
     if case == "wrong_member":
         entries[0].membership_id = uuid4()
     monkeypatch.setattr(repositories, "obligations", AsyncMock(return_value=entries))
-    assert asyncio.run(services.refresh(AsyncMock(), item, cycle)) is ready
+    assert (
+        asyncio.run(services.refresh(AsyncMock(), item, cycle, audit_change=False))
+        is ready
+    )
     assert item.status == (PayoutStatus.READY if ready else PayoutStatus.PENDING)
     assert item.available_amount == sum(
         (e.amount_due for e in entries if e.status == ContributionStatus.CONFIRMED),

@@ -12,7 +12,7 @@ from app.core.config import get_database_settings
 pytestmark = pytest.mark.integration
 
 
-def test_sprints_4_to_6_migration_roundtrip(test_database_url, monkeypatch):
+def test_sprints_4_to_7_migration_roundtrip(test_database_url, monkeypatch):
     """Only the guarded disposable test DB; no local-dev or remote migration."""
     config = Config(Path(__file__).resolve().parents[2] / "alembic.ini")
     monkeypatch.setenv("DATABASE_URL", test_database_url)
@@ -32,9 +32,13 @@ def test_sprints_4_to_6_migration_roundtrip(test_database_url, monkeypatch):
         assert "users" in names and "memberships" in names
         assert not {"cycles", "cycle_turns", "contributions", "payouts"} & set(names)
         command.upgrade(config, "head")
-        assert {"cycles", "cycle_turns", "contributions", "payouts"} <= set(
-            asyncio.run(table_names())
-        )
+        assert {
+            "cycles",
+            "cycle_turns",
+            "contributions",
+            "payouts",
+            "audit_events",
+        } <= set(asyncio.run(table_names()))
         command.check(config)
     finally:
         command.upgrade(config, "head")

@@ -1,6 +1,6 @@
 # Backend Ndjoka Tontine
 
-Backend FastAPI de Ndjoka Tontine, version 0.7.0. Il valide les Access Tokens
+Backend FastAPI de Ndjoka Tontine, version 0.9.0. Il valide les Access Tokens
 Auth0, provisionne les profils locaux dans PostgreSQL et applique les statuts
 et rôles globaux de la plateforme. Auth0 reste responsable de
 l'authentification ; PostgreSQL conserve les données métier du profil.
@@ -59,6 +59,12 @@ L'API est alors disponible sur `http://127.0.0.1:8000` :
 - `GET /api/v1/me/contributions` expose l'échéancier personnel ; les routes
   `/api/v1/contributions/{contribution_id}` déclarent, confirment ou rejettent
   les obligations, sans paiement réel ;
+- les routes de lecture `/api/v1/me/audit-events`,
+  `/api/v1/tontines/{tontine_id}/audit-events` et `/api/v1/admin/audit-events`
+  exposent l'historique immuable selon les permissions ;
+- les routes `/api/v1/me/notifications` exposent les notifications privées,
+  leur compteur et leur lecture ; le webhook signé est sur
+  `POST /api/v1/webhooks/resend` ;
 - `GET /docs` ouvre la documentation interactive OpenAPI.
 
 ## Vérifications
@@ -103,14 +109,23 @@ AUTH0_DOMAIN=your-tenant.eu.auth0.com
 AUTH0_AUDIENCE=https://api.ndjoka-tontine.com
 CORS_ALLOWED_ORIGINS=["http://localhost:5173","https://app.ndjoka-tontine.com"]
 DATABASE_URL=postgresql+asyncpg://ndjoka_postgres_admin:change-me-for-local-development@127.0.0.1:5433/ndjoka_db
+EMAIL_PROVIDER=console
+EMAIL_FROM_NAME=Ndjoka Tontine
+EMAIL_FROM_ADDRESS=notifications@ndjoka-tontine.com
+EMAIL_CONTACT_ADDRESS=contact@ndjoka-tontine.com
+EMAIL_REPLY_TO=
+FRONTEND_BASE_URL=http://localhost:5173
+RESEND_API_KEY=
+RESEND_WEBHOOK_SECRET=
 ```
 
 `AUTH0_DOMAIN` ne doit contenir ni `https://` ni barre finale. L'audience doit
 correspondre exactement à l'Identifier de la Custom API Auth0.
 Les origines CORS sont une liste JSON explicite ; n'utilisez pas `*` pour une
-route recevant un Bearer Token. Le middleware accepte `GET`, `PATCH`, `POST`, `PUT`
-et les en-têtes `Authorization` et `Content-Type`, y compris leurs requêtes
-préliminaires `OPTIONS`.
+route recevant un Bearer Token. Le middleware accepte `GET`, `PATCH`, `POST`,
+`PUT` et les en-têtes `Authorization`, `Content-Type` et `X-Request-ID`, y
+compris leurs requêtes préliminaires `OPTIONS`. La réponse expose également
+`X-Request-ID` au navigateur.
 
 Le backend charge `.env.dev` par défaut. Pour sélectionner `.env.prod`, lancez
 le processus avec `APP_ENV=prod`. Les variables système restent prioritaires,
@@ -160,8 +175,8 @@ les migrations RDS sont appliquées explicitement depuis le poste local, avec
 `backend/.env.prod` et `APP_ENV=prod`. La procédure complète est documentée
 dans [`../infra/README.md`](../infra/README.md#migrer-postgresql-aws-rds-avec-alembic).
 
-Pour la version 0.7.0, `alembic current` doit afficher
-`e64ca02b8d39 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
+Pour la version 0.9.0, `alembic current` doit afficher
+`a91c4e7d2b60 (head)` et `alembic check` doit indiquer qu'aucune nouvelle
 opération n'est détectée.
 Retirez ensuite l'accès réseau externe devenu inutile, configurez l'URL interne
 dans le Web Service et redéployez. La procédure distante complète et les
@@ -247,6 +262,14 @@ Le Sprint 6 (backend uniquement) est documenté dans le
 [contrat Versements](app/modules/payouts/README.md). Il expose douze endpoints
 pour générer, consulter, approuver, déclarer, recevoir, contester et annuler
 les versements manuels ; voir aussi [la validation](SPRINT_6_VALIDATION.md).
+Le Sprint 7 est décrit dans le
+[contrat Audit](app/modules/audit/README.md). Il ajoute un historique métier
+append-only, corrélé par `X-Request-ID`, consultable avec un curseur et protégé
+par les rôles ; voir aussi [la validation](SPRINT_7_VALIDATION.md).
+Le Sprint 8 est décrit dans le
+[contrat Notifications](app/modules/notifications/README.md). Le Web Service
+seul n'exécute ni le worker Outbox ni le job quotidien de rappels : prévoir un
+ordonnanceur externe.
 
 ## Migrations de schéma
 
@@ -282,6 +305,11 @@ cotisation déclaratives. Aucune de ces migrations ne réalise de paiement.
 La révision Sprint 6 `e64ca02b8d39` crée `payouts`, ses contraintes financières
 et ses clés étrangères composites. Pour un cycle actif antérieur au Sprint 6,
 un owner ou manager peut appeler `POST .../cycles/{cycle_id}/payouts/generate`.
+La révision Sprint 7 `f75db14c9a20` crée `audit_events`, les index de
+consultation et le trigger PostgreSQL interdisant toute modification ou
+suppression d'un événement.
+La révision Sprint 8 `a91c4e7d2b60` ajoute les quatre tables des notifications,
+de l'Outbox, des livraisons e-mail et des webhooks Resend.
 
 Après la migration et la première connexion du mainteneur, le premier
 `platform_admin` doit être désigné explicitement par son `auth0_sub` exact.

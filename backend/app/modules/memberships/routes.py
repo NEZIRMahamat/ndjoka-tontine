@@ -174,9 +174,12 @@ async def change_role(
     session: Session,
     owner: OwnerMembership,
 ) -> MembershipRead:
-    del owner
     membership = await services.change_member_role(
-        session, await tontine_or_404(session, tontine_id), user_id, payload
+        session,
+        await tontine_or_404(session, tontine_id),
+        user_id,
+        payload,
+        actor_user_id=owner.user_id,
     )
     return MembershipRead.model_validate(membership)
 

@@ -1,0 +1,2 @@
+Votre cotisation de $amount $currency pour « $tontine_name » est exigible le $due_at.
+Consulter : $action_url

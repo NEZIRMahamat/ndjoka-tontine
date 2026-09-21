@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.memberships import repositories
 from app.modules.memberships.enums import (
     InvitationStatus,
@@ -14,6 +15,7 @@ from app.modules.memberships.enums import (
 )
 from app.modules.memberships.models import Invitation, Membership
 from app.modules.memberships.schemas import InvitationCreate, MembershipRoleUpdate
+from app.modules.notifications.service import action_key, enqueue_event, recipient
 from app.modules.tontines.enums import TontineStatus
 from app.modules.tontines.models import Tontine
 from app.modules.users.models import User
@@ -92,6 +94,37 @@ async def create_invitation(
     )
     try:
         await repositories.insert_invitation(session, invitation)
+        await record(
+            session,
+            event_name="invitation.created",
+            actor_user_id=actor.id,
+            tontine_id=tontine.id,
+            resource_type="invitation",
+            resource_id=invitation.id,
+            changes={
+                "role": {"to": invitation.role.value},
+                "status": {"to": "pending"},
+            },
+        )
+        await enqueue_event(
+            session,
+            event_name="invitation.created",
+            aggregate_type="invitation",
+            aggregate_id=invitation.id,
+            tontine_id=tontine.id,
+            recipients=[
+                {
+                    "user_id": str(existing_user.id) if existing_user else None,
+                    "email": email,
+                }
+            ],
+            template_context={
+                "tontine_name": tontine.name,
+                "role": invitation.role.value,
+            },
+            action_path="/invitations",
+            deduplication_key=f"invitation:{invitation.id}:created",
+        )
         await session.commit()
         await session.refresh(invitation)
         return invitation, token
@@ -143,6 +176,15 @@ async def revoke_invitation(
             raise MembershipError("Cette invitation a expiré", 409)
         invitation.status = InvitationStatus.REVOKED
         invitation.revoked_at = now
+        await record(
+            session,
+            event_name="invitation.revoked",
+            actor_user_id=actor_membership.user_id,
+            tontine_id=tontine.id,
+            resource_type="invitation",
+            resource_id=invitation.id,
+            changes={"status": change(InvitationStatus.PENDING, invitation.status)},
+        )
         await session.commit()
         await session.refresh(invitation)
         return invitation
@@ -203,6 +245,20 @@ async def accept_invitation(
         invitation.status = InvitationStatus.ACCEPTED
         invitation.accepted_at = now
         invitation.accepted_by_user_id = actor.id
+        await record(
+            session,
+            event_name="invitation.accepted",
+            actor_user_id=actor.id,
+            subject_user_id=actor.id,
+            tontine_id=tontine.id,
+            resource_type="invitation",
+            resource_id=invitation.id,
+            changes={
+                "status": change(InvitationStatus.PENDING, invitation.status),
+                "membership_id": {"to": membership.id},
+                "role": {"to": membership.role.value},
+            },
+        )
         await session.commit()
         await session.refresh(membership)
         return membership
@@ -228,6 +284,8 @@ async def change_member_role(
     tontine: Tontine,
     user_id: UUID,
     payload: MembershipRoleUpdate,
+    *,
+    actor_user_id: UUID,
 ) -> Membership:
     ensure_writable(tontine)
     if payload.role == MembershipRole.OWNER:
@@ -244,7 +302,36 @@ async def change_member_role(
             raise MembershipError(
                 "Le rôle du propriétaire se modifie par transfert", 409
             )
+        old_role = membership.role
         membership.role = payload.role
+        if old_role != membership.role:
+            await record(
+                session,
+                event_name="membership.role_changed",
+                actor_user_id=actor_user_id,
+                subject_user_id=membership.user_id,
+                tontine_id=tontine.id,
+                resource_type="membership",
+                resource_id=membership.id,
+                changes={"role": change(old_role, membership.role)},
+            )
+            target_user = await session.get(User, membership.user_id)
+            await enqueue_event(
+                session,
+                event_name="membership.role_changed",
+                aggregate_type="membership",
+                aggregate_id=membership.id,
+                tontine_id=tontine.id,
+                recipients=[recipient(target_user)],
+                template_context={
+                    "tontine_name": tontine.name,
+                    "role": membership.role.value,
+                },
+                action_path=f"/tontines/{tontine.id}/members",
+                deduplication_key=action_key(
+                    f"membership:{membership.id}:role:{membership.role.value}"
+                ),
+            )
         await session.commit()
         await session.refresh(membership)
         return membership
@@ -282,6 +369,18 @@ async def transfer_ownership(
         locked_owner.role = MembershipRole.MEMBER
         await session.flush()
         target.role = MembershipRole.OWNER
+        await record(
+            session,
+            event_name="membership.ownership_transferred",
+            actor_user_id=current_owner.user_id,
+            subject_user_id=target.user_id,
+            tontine_id=tontine.id,
+            resource_type="membership",
+            resource_id=target.id,
+            changes={
+                "owner_user_id": change(current_owner.user_id, target.user_id),
+            },
+        )
         await session.commit()
         await session.refresh(target)
         return target
@@ -309,6 +408,16 @@ async def leave_tontine(
             raise MembershipError("Adhésion active introuvable", 404)
         locked.status = MembershipStatus.LEFT
         locked.ended_at = datetime.now(UTC)
+        await record(
+            session,
+            event_name="membership.left",
+            actor_user_id=locked.user_id,
+            subject_user_id=locked.user_id,
+            tontine_id=tontine.id,
+            resource_type="membership",
+            resource_id=locked.id,
+            changes={"status": change(MembershipStatus.ACTIVE, locked.status)},
+        )
         await session.commit()
         await session.refresh(locked)
         return locked
@@ -350,6 +459,16 @@ async def remove_member(
             raise MembershipError("Rôle interne insuffisant", 403)
         target.status = MembershipStatus.REMOVED
         target.ended_at = datetime.now(UTC)
+        await record(
+            session,
+            event_name="membership.removed",
+            actor_user_id=actor_membership.user_id,
+            subject_user_id=target.user_id,
+            tontine_id=tontine.id,
+            resource_type="membership",
+            resource_id=target.id,
+            changes={"status": change(MembershipStatus.ACTIVE, target.status)},
+        )
         await session.commit()
         await session.refresh(target)
         return target

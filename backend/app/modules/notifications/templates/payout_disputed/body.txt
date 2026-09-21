@@ -1,0 +1,2 @@
+Un versement a été contesté dans « $tontine_name ».
+Consulter : $action_url

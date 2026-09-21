@@ -1,18 +1,21 @@
 import json
 import os
-from groq import AsyncGroq
 
+from groq import AsyncGroq
 
 client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
+
 def load_prompt(filename: str) -> str:
     # Ajuste le chemin selon la structure de ton projet
-    filepath = os.path.join(os.path.dirname(__file__), 'prompts', filename)
-    with open(filepath, 'r', encoding='utf-8') as file:
+    filepath = os.path.join(os.path.dirname(__file__), "prompts", filename)
+    with open(filepath, encoding="utf-8") as file:
         return file.read()
 
+
 # Utilisation
-GUARDRAIL_PROMPT = load_prompt('backend/app/ai/prompts/prompt_system_guardrail.txt')
+GUARDRAIL_PROMPT = load_prompt("backend/app/ai/prompts/prompt_system_guardrail.txt")
+
 
 async def check_moderation(user_message: str) -> dict:
     """
@@ -25,10 +28,10 @@ async def check_moderation(user_message: str) -> dict:
         model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": user_message},
         ],
         response_format={"type": "json_object"},
-        temperature=0.0
+        temperature=0.0,
     )
 
     return json.loads(response.choices[0].message.content)

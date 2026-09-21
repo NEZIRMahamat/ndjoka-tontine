@@ -1,0 +1,2 @@
+Vous êtes invité à rejoindre la tontine « $tontine_name » avec le rôle $role.
+Ouvrez Ndjoka : $action_url

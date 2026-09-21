@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.audit.services import change, record
 from app.modules.contributions.enums import ContributionStatus
 from app.modules.cycles.enums import CycleStatus
 from app.modules.cycles.models import Cycle
@@ -11,6 +12,11 @@ from app.modules.cycles.services import CycleError, get_cycle
 from app.modules.memberships import repositories as membership_repository
 from app.modules.memberships.enums import MembershipRole
 from app.modules.memberships.models import Membership
+from app.modules.notifications.service import (
+    enqueue_event,
+    recipient,
+    tontine_recipients,
+)
 from app.modules.payouts import repositories
 from app.modules.payouts.enums import PayoutStatus
 from app.modules.payouts.models import Payout
@@ -85,7 +91,36 @@ def required_members(cycle, beneficiary_id):
     return ids if cycle.beneficiary_contributes else ids - {beneficiary_id}
 
 
-async def refresh(session: AsyncSession, item: Payout, cycle: Cycle) -> bool:
+async def audit_payout(
+    session: AsyncSession,
+    item: Payout,
+    event_name: str,
+    changes: dict,
+    *,
+    actor_user_id: UUID | None = None,
+) -> None:
+    beneficiary = await session.get(Membership, item.beneficiary_membership_id)
+    await record(
+        session,
+        event_name=event_name,
+        actor_user_id=actor_user_id,
+        subject_user_id=beneficiary.user_id,
+        tontine_id=item.tontine_id,
+        resource_type="payout",
+        resource_id=item.id,
+        changes=changes,
+        source="api" if actor_user_id else "system",
+    )
+
+
+async def refresh(
+    session: AsyncSession,
+    item: Payout,
+    cycle: Cycle,
+    *,
+    actor_user_id: UUID | None = None,
+    audit_change: bool = True,
+) -> bool:
     """Recompute from actual obligations; caller owns tontine/cycle locks."""
     obligations = await repositories.obligations(session, item.turn_id)
     actual = {entry.membership_id for entry in obligations}
@@ -109,12 +144,23 @@ async def refresh(session: AsyncSession, item: Payout, cycle: Cycle) -> bool:
         and expected > ZERO
         and all(entry.status == ContributionStatus.CONFIRMED for entry in obligations)
     )
+    old_status = item.status
     if item.status in {PayoutStatus.PENDING, PayoutStatus.READY}:
         item.status = PayoutStatus.READY if eligible else PayoutStatus.PENDING
+    if audit_change and old_status != item.status:
+        await audit_payout(
+            session,
+            item,
+            "payout.ready" if item.status == PayoutStatus.READY else "payout.pending",
+            {"status": change(old_status, item.status)},
+            actor_user_id=actor_user_id,
+        )
     return eligible
 
 
-async def generate_for_cycle(session: AsyncSession, cycle: Cycle) -> int:
+async def generate_for_cycle(
+    session: AsyncSession, cycle: Cycle, *, actor_user_id: UUID | None = None
+) -> int:
     """Internal hook: no commit, atomic with activation and contributions."""
     if cycle.status not in {CycleStatus.ACTIVE, CycleStatus.COMPLETED}:
         raise PayoutError("Les versements nécessitent un cycle actif ou terminé", 409)
@@ -149,7 +195,19 @@ async def generate_for_cycle(session: AsyncSession, cycle: Cycle) -> int:
                 "Le montant du tour dépasse la capacité monétaire du système", 409
             )
         session.add(item)
-        await refresh(session, item, cycle)
+        await session.flush()
+        await refresh(session, item, cycle, audit_change=False)
+        await audit_payout(
+            session,
+            item,
+            "payout.generated",
+            {
+                "status": {"to": item.status.value},
+                "expected_amount": {"to": item.expected_amount},
+                "currency": {"to": item.currency},
+            },
+            actor_user_id=actor_user_id,
+        )
         created += 1
     await session.flush()
     return created
@@ -161,7 +219,7 @@ async def generate(session, tontine_id, cycle_id, actor):
         cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
         membership = await membership_for(session, tontine_id, actor, lock=True)
         require_role(membership, MANAGERS)
-        await generate_for_cycle(session, cycle)
+        await generate_for_cycle(session, cycle, actor_user_id=actor.id)
         await session.commit()
     except Exception:
         await session.rollback()
@@ -177,9 +235,19 @@ async def refresh_for_turn(session, cycle, turn_id):
 async def cancel_for_cycle(session, cycle_id):
     for item in await repositories.for_cycle(session, cycle_id):
         if item.status in UNPAID:
+            old_status = item.status
             item.status = PayoutStatus.CANCELLED
             item.cancelled_at = datetime.now(UTC)
             item.cancellation_reason = "Cycle annulé"
+            await audit_payout(
+                session,
+                item,
+                "payout.cancelled",
+                {
+                    "status": change(old_status, item.status),
+                    "reason": {"to": "cycle_cancelled"},
+                },
+            )
     await session.flush()
 
 
@@ -206,7 +274,7 @@ async def transition(session, payout_id, actor, action, payload=None):
         authorize_action(action, item, membership)
         now = datetime.now(UTC)
         if action in {"refresh-readiness", "approve", "declare-paid"}:
-            eligible = await refresh(session, item, cycle)
+            eligible = await refresh(session, item, cycle, actor_user_id=actor.id)
         if action == "refresh-readiness":
             pass
         elif action == "approve":
@@ -220,6 +288,16 @@ async def transition(session, payout_id, actor, action, payload=None):
             item.status = PayoutStatus.APPROVED
             item.approved_amount = payload.approved_amount
             item.approved_at, item.approved_by_user_id = now, actor.id
+            await audit_payout(
+                session,
+                item,
+                "payout.approved",
+                {
+                    "status": change(PayoutStatus.READY, item.status),
+                    "approved_amount": {"to": item.approved_amount},
+                },
+                actor_user_id=actor.id,
+            )
         elif action == "declare-paid":
             if item.status != PayoutStatus.APPROVED or not eligible:
                 raise PayoutError("Un versement approuvé et éligible est requis", 409)
@@ -229,26 +307,101 @@ async def transition(session, payout_id, actor, action, payload=None):
                 payload.external_reference,
                 payload.payment_note,
             )
+            await audit_payout(
+                session,
+                item,
+                "payout.declared_paid",
+                {"status": change(PayoutStatus.APPROVED, item.status)},
+                actor_user_id=actor.id,
+            )
+            beneficiary = await session.get(Membership, item.beneficiary_membership_id)
+            beneficiary_user = await session.get(User, beneficiary.user_id)
+            tontine = await session.get(Tontine, item.tontine_id)
+            await enqueue_event(
+                session,
+                event_name="payout.declared_paid",
+                aggregate_type="payout",
+                aggregate_id=item.id,
+                tontine_id=item.tontine_id,
+                recipients=[recipient(beneficiary_user)],
+                template_context={"tontine_name": tontine.name},
+                action_path=f"/tontines/{item.tontine_id}/payouts/{item.id}",
+                deduplication_key=f"payout:{item.id}:declared_paid",
+            )
         elif action == "confirm-receipt":
             if item.status != PayoutStatus.DECLARED_PAID:
                 raise PayoutError("Seul un versement déclaré peut être reçu", 409)
             item.status, item.received_at = PayoutStatus.RECEIVED, now
+            await audit_payout(
+                session,
+                item,
+                "payout.received",
+                {"status": change(PayoutStatus.DECLARED_PAID, item.status)},
+                actor_user_id=actor.id,
+            )
         elif action == "dispute":
             if item.status != PayoutStatus.DECLARED_PAID:
                 raise PayoutError("Seul un versement déclaré peut être contesté", 409)
             item.status = PayoutStatus.DISPUTED
             item.disputed_at, item.dispute_reason = now, payload.reason
+            await audit_payout(
+                session,
+                item,
+                "payout.disputed",
+                {
+                    "status": change(PayoutStatus.DECLARED_PAID, item.status),
+                    "reason_provided": {"to": True},
+                },
+                actor_user_id=actor.id,
+            )
+            tontine = await session.get(Tontine, item.tontine_id)
+            await enqueue_event(
+                session,
+                event_name="payout.disputed",
+                aggregate_type="payout",
+                aggregate_id=item.id,
+                tontine_id=item.tontine_id,
+                recipients=await tontine_recipients(
+                    session,
+                    item.tontine_id,
+                    roles={MembershipRole.OWNER, MembershipRole.MANAGER},
+                ),
+                template_context={"tontine_name": tontine.name},
+                action_path=f"/tontines/{item.tontine_id}/payouts/{item.id}",
+                deduplication_key=f"payout:{item.id}:disputed",
+            )
         elif action == "resolve-dispute":
             if item.status != PayoutStatus.DISPUTED:
                 raise PayoutError("Aucune contestation à résoudre", 409)
             item.status, item.received_at = PayoutStatus.RECEIVED, now
             item.resolved_at, item.resolved_by_user_id = now, actor.id
             item.resolution_note = payload.resolution_note
+            await audit_payout(
+                session,
+                item,
+                "payout.dispute_resolved",
+                {
+                    "status": change(PayoutStatus.DISPUTED, item.status),
+                    "resolution_provided": {"to": True},
+                },
+                actor_user_id=actor.id,
+            )
         elif action == "cancel":
             if item.status not in UNPAID:
                 raise PayoutError("Un versement effectué ne peut plus être annulé", 409)
+            old_status = item.status
             item.status = PayoutStatus.CANCELLED
             item.cancelled_at, item.cancellation_reason = now, payload.reason
+            await audit_payout(
+                session,
+                item,
+                "payout.cancelled",
+                {
+                    "status": change(old_status, item.status),
+                    "reason_provided": {"to": True},
+                },
+                actor_user_id=actor.id,
+            )
         await session.commit()
         await session.refresh(item)
         return read_item(item, membership)

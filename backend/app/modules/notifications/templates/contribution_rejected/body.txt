@@ -1,0 +1,2 @@
+Votre déclaration de cotisation pour « $tontine_name » a été rejetée.
+Consulter : $action_url
