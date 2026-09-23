@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.ai.router import router as ai_router
 from app.api.routes import admin_users, health, me, webhooks
 from app.modules.audit.routes import router as audit_router
 from app.modules.contributions.routes import router as contributions_router
@@ -21,3 +22,4 @@ api_router.include_router(payouts_router)
 api_router.include_router(audit_router)
 api_router.include_router(notifications_router)
 api_router.include_router(webhooks.router)
+api_router.include_router(ai_router)

@@ -1,63 +1,260 @@
-import json
+"""Outils exposés à l'agent Ndjoka AI.
 
-# 1. Définition des schémas des outils pour Groq
+Chaque outil interroge exclusivement les données réelles du porteur de
+la requête, via les mêmes dépôts/services que le reste de l'API. Aucune
+valeur n'est inventée : en cas d'erreur, l'outil répond par un statut
+d'erreur explicite plutôt que de faire planter la conversation.
+"""
+
+import json
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.contributions.enums import EffectiveContributionStatus
+from app.modules.contributions.repositories import list_user_contributions
+from app.modules.payouts.enums import PayoutStatus
+from app.modules.payouts.repositories import list_items as list_payout_items
+from app.modules.tontines import services as tontine_services
+from app.modules.tontines.enums import TontineStatus
+from app.modules.users.models import User
+
 TOOLS_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "get_user_balance",
-            "description": "Récupère le solde actuel du compte de l'utilisateur.",
+            "name": "list_my_tontines",
+            "description": (
+                "Lister les tontines réelles de l'utilisateur connecté "
+                "(propriétaire ou membre actif), avec statut, devise et capacité."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["draft", "active", "archived"],
+                        "description": "Filtrer par statut de tontine (optionnel).",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_financial_overview",
+            "description": (
+                "Obtenir un aperçu financier réel et à jour de l'utilisateur : "
+                "nombre de tontines actives, cotisations en attente ou en retard, "
+                "et prochain versement disponible."
+            ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "search_tontines",
-            "description": "Recherche les tontines disponibles selon la capacité mensuelle de l'utilisateur.",
+            "name": "list_my_contributions",
+            "description": (
+                "Lister les cotisations réelles de l'utilisateur, triées par échéance."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "monthly_budget": {
-                        "type": "number",
-                        "description": "Montant mensuel que l'utilisateur souhaite épargner ou investir (en EUR/XAF).",
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "pending",
+                            "declared",
+                            "confirmed",
+                            "rejected",
+                            "late",
+                            "cancelled",
+                        ],
+                        "description": "Filtrer par statut effectif (optionnel).",
                     }
                 },
-                "required": ["monthly_budget"],
+                "required": [],
             },
         },
     },
-    ...,
+    {
+        "type": "function",
+        "function": {
+            "name": "list_my_payouts",
+            "description": (
+                "Lister les versements réels dont l'utilisateur est bénéficiaire."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "pending",
+                            "ready",
+                            "approved",
+                            "declared_paid",
+                            "received",
+                            "disputed",
+                            "cancelled",
+                        ],
+                        "description": "Filtrer par statut de versement (optionnel).",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 
-# 2. Exécution réelle des fonctions (interroge ta base PostgreSQL)
-async def execute_tool(tool_name: str, arguments: dict, user_id: str) -> str:
-    if tool_name == "get_user_balance":
-        # Remplace par ta vraie requête SQL via asyncpg / SQLAlchemy
-        # ex: balance = await db.fetchval("SELECT balance FROM accounts WHERE user_id = $1", user_id)
-        balance = 450.00  # Exemple
-        return json.dumps({"status": "success", "balance": balance, "currency": "EUR"})
+def _amount(value: Decimal) -> float:
+    return float(value)
 
-    elif tool_name == "search_tontines":
-        budget = arguments.get("monthly_budget", 0)
-        # Remplace par ta requête de tontines compatibles
-        tontines = [
-            {
-                "id": "t-1",
-                "name": "Tontine Diaspora Solidaire",
-                "contribution": 100,
-                "frequence": "mensuelle",
-                "places_restantes": 3,
-            },
-            {
-                "id": "t-2",
-                "name": "Tontine Épargne Express",
-                "contribution": min(budget, 200),
-                "frequence": "mensuelle",
-                "places_restantes": 1,
-            },
-        ]
-        return json.dumps({"status": "success", "results": tontines})
 
-    return json.dumps({"error": f"Outil inconnu : {tool_name}"})
+async def _list_my_tontines(
+    session: AsyncSession, actor: User, arguments: dict
+) -> str:
+    status_value = arguments.get("status")
+    status = TontineStatus(status_value) if status_value else None
+    items, total = await tontine_services.list_tontines(
+        session, actor, limit=10, offset=0, status=status
+    )
+    tontines = [
+        {
+            "id": str(item.id),
+            "name": item.name,
+            "status": item.status.value,
+            "currency": item.currency,
+            "max_members": item.max_members,
+        }
+        for item in items
+    ]
+    return json.dumps({"status": "success", "total": total, "tontines": tontines})
+
+
+async def _get_financial_overview(session: AsyncSession, actor: User) -> str:
+    now = datetime.now(UTC)
+
+    tontines, tontines_total = await tontine_services.list_tontines(
+        session, actor, limit=100, offset=0
+    )
+    active_count = sum(1 for item in tontines if item.status == TontineStatus.ACTIVE)
+
+    pending_contributions, pending_total = await list_user_contributions(
+        session,
+        actor.id,
+        limit=50,
+        offset=0,
+        status=EffectiveContributionStatus.PENDING,
+        now=now,
+    )
+    late_contributions, late_total = await list_user_contributions(
+        session,
+        actor.id,
+        limit=50,
+        offset=0,
+        status=EffectiveContributionStatus.LATE,
+        now=now,
+    )
+    pending_amount = sum(_amount(item.amount_due) for item in pending_contributions)
+    late_amount = sum(_amount(item.amount_due) for item in late_contributions)
+    next_contribution = min(
+        pending_contributions, key=lambda item: item.due_at, default=None
+    )
+
+    ready_payouts, _ = await list_payout_items(
+        session, user_id=actor.id, status=PayoutStatus.READY, limit=5, offset=0
+    )
+    next_payout = ready_payouts[0] if ready_payouts else None
+
+    overview = {
+        "status": "success",
+        "tontines_total": tontines_total,
+        "active_tontines": active_count,
+        "pending_contributions_count": pending_total,
+        "pending_contributions_amount": pending_amount,
+        "late_contributions_count": late_total,
+        "late_contributions_amount": late_amount,
+        "next_contribution_due_at": (
+            next_contribution.due_at.isoformat() if next_contribution else None
+        ),
+        "next_payout_ready": next_payout is not None,
+        "next_payout_expected_amount": (
+            _amount(next_payout.expected_amount) if next_payout else None
+        ),
+        "next_payout_currency": next_payout.currency if next_payout else None,
+    }
+    return json.dumps(overview)
+
+
+async def _list_my_contributions(
+    session: AsyncSession, actor: User, arguments: dict
+) -> str:
+    status_value = arguments.get("status")
+    status = EffectiveContributionStatus(status_value) if status_value else None
+    items, total = await list_user_contributions(
+        session,
+        actor.id,
+        limit=10,
+        offset=0,
+        status=status,
+        now=datetime.now(UTC),
+    )
+    contributions = [
+        {
+            "id": str(item.id),
+            "amount_due": _amount(item.amount_due),
+            "status": item.status.value,
+            "due_at": item.due_at.isoformat(),
+        }
+        for item in items
+    ]
+    return json.dumps(
+        {"status": "success", "total": total, "contributions": contributions}
+    )
+
+
+async def _list_my_payouts(session: AsyncSession, actor: User, arguments: dict) -> str:
+    status_value = arguments.get("status")
+    status = PayoutStatus(status_value) if status_value else None
+    items, total = await list_payout_items(
+        session, user_id=actor.id, status=status, limit=10, offset=0
+    )
+    payouts = [
+        {
+            "id": str(item.id),
+            "status": item.status.value,
+            "expected_amount": _amount(item.expected_amount),
+            "currency": item.currency,
+            "scheduled_for": item.scheduled_for.isoformat(),
+        }
+        for item in items
+    ]
+    return json.dumps({"status": "success", "total": total, "payouts": payouts})
+
+
+async def execute_tool(
+    session: AsyncSession, actor: User, tool_name: str, arguments: dict
+) -> str:
+    """Exécuter un outil de manière sécurisée : jamais d'exception propagée."""
+    try:
+        if tool_name == "list_my_tontines":
+            return await _list_my_tontines(session, actor, arguments)
+        if tool_name == "get_financial_overview":
+            return await _get_financial_overview(session, actor)
+        if tool_name == "list_my_contributions":
+            return await _list_my_contributions(session, actor, arguments)
+        if tool_name == "list_my_payouts":
+            return await _list_my_payouts(session, actor, arguments)
+        return json.dumps(
+            {"status": "error", "message": f"Outil inconnu : {tool_name}"}
+        )
+    except Exception:
+        return json.dumps(
+            {"status": "error", "message": "Donnée momentanément indisponible."}
+        )

@@ -16,6 +16,7 @@ dependencies = [
     "uvicorn[standard]>=0.35,<1.0",
     "httpx>=0.28,<1.0",
     "svix>=1.75,<2.0",
+    "groq>=1.0,<2.0",
 ]
 
 [dependency-groups]

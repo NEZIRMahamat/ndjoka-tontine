@@ -170,6 +170,39 @@ class EmailSettings(BaseSettings):
         return self
 
 
+class AISettings(BaseSettings):
+    """Configuration de l'assistant Ndjoka AI (fournisseur Groq)."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    groq_api_key: SecretStr
+    groq_agent_model: str = "llama-3.3-70b-versatile"
+    groq_moderator_model: str = "llama-3.1-8b-instant"
+    ai_history_limit: int = 16
+
+    @field_validator("groq_api_key")
+    @classmethod
+    def validate_groq_api_key(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("GROQ_API_KEY ne peut pas être vide")
+        return value
+
+    @field_validator("groq_agent_model", "groq_moderator_model")
+    @classmethod
+    def validate_model_name(cls, value: str) -> str:
+        model = value.strip()
+        if not model:
+            raise ValueError("Les modèles Groq ne peuvent pas être vides")
+        return model
+
+    @field_validator("ai_history_limit")
+    @classmethod
+    def validate_history_limit(cls, value: int) -> int:
+        if value < 2:
+            raise ValueError("AI_HISTORY_LIMIT doit être supérieur ou égal à 2")
+        return value
+
+
 class Settings(BaseSettings):
     """Configuration du backend fournie par l'environnement d'exécution."""
 
@@ -254,6 +287,15 @@ def get_email_settings() -> EmailSettings:
 def get_settings() -> Settings:
     """Charger une seule fois la configuration du processus FastAPI."""
     return Settings(
+        _env_file=get_environment_file(),
+        _env_file_encoding="utf-8",
+    )
+
+
+@lru_cache
+def get_ai_settings() -> AISettings:
+    """Charger la configuration Ndjoka AI, requise uniquement par ses routes."""
+    return AISettings(
         _env_file=get_environment_file(),
         _env_file_encoding="utf-8",
     )
