@@ -1,4 +1,4 @@
-import { apiRequest, isRecord } from './api'
+import { apiRequest, isRecord } from '@/lib/http'
 
 export type TontineStatus = 'draft' | 'active' | 'archived'
 export type MembershipRole = 'owner' | 'manager' | 'treasurer' | 'member'
@@ -91,6 +91,12 @@ export async function listTontines(token: string, offset = 0, signal?: AbortSign
   const params = new URLSearchParams({ limit: '20', offset: String(offset) })
   if (status) params.set('status', status)
   return parsePage(await apiRequest(token, `/api/v1/tontines?${params}`, { signal }), isTontine, 'La liste')
+}
+
+export async function getTontine(token: string, id: string, signal?: AbortSignal): Promise<Tontine> {
+  const payload = await apiRequest(token, `/api/v1/tontines/${id}`, { signal })
+  if (!isTontine(payload)) throw new Error('La tontine reçue est invalide')
+  return payload
 }
 
 export async function createTontine(token: string, input: TontineInput): Promise<Tontine> {
