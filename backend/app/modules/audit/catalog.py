@@ -29,6 +29,7 @@ EVENT_CATALOG = {
     "invitation.accepted": contract("invitation", "status", "membership_id", "role"),
     "invitation.revoked": contract("invitation", "status"),
     "membership.role_changed": contract("membership", "role"),
+    "membership.joined_open_tontine": contract("membership", "role"),
     "membership.removed": contract("membership", "status"),
     "membership.left": contract("membership", "status"),
     "membership.ownership_transferred": contract("membership", "owner_user_id"),

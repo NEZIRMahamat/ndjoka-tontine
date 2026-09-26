@@ -14,8 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.contributions.enums import EffectiveContributionStatus
 from app.modules.contributions.repositories import list_user_contributions
+from app.modules.discovery import services as discovery_services
 from app.modules.payouts.enums import PayoutStatus
 from app.modules.payouts.repositories import list_items as list_payout_items
+from app.modules.profiles import services as profile_services
+from app.modules.profiles.reliability import get_reliability
 from app.modules.tontines import services as tontine_services
 from app.modules.tontines.enums import TontineStatus
 from app.modules.users.models import User
@@ -104,6 +107,45 @@ TOOLS_DEFINITIONS = [
                         ],
                         "description": "Filtrer par statut de versement (optionnel).",
                     }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_my_saver_profile",
+            "description": (
+                "Récupérer le profil d'épargne déclaré par l'utilisateur "
+                "(capacité mensuelle, rythme, objectif, horizon, taille de "
+                "groupe, expérience, préférence de tour) et son score de "
+                "fiabilité réel. Indique si le profil reste à compléter."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recommend_tontines",
+            "description": (
+                "Proposer les tontines ouvertes qui correspondent le mieux au "
+                "profil de l'utilisateur, avec le montant, le rythme, les places "
+                "restantes et les raisons concrètes de la correspondance. "
+                "N'inclut jamais les tontines qu'il a déjà rejointes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "search": {
+                        "type": "string",
+                        "description": "Filtrer par mot-clé sur le nom (optionnel).",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Nombre maximum de propositions (1 à 10).",
+                    },
                 },
                 "required": [],
             },
@@ -238,6 +280,83 @@ async def _list_my_payouts(session: AsyncSession, actor: User, arguments: dict) 
     return json.dumps({"status": "success", "total": total, "payouts": payouts})
 
 
+async def _get_my_saver_profile(session: AsyncSession, actor: User) -> str:
+    profile = await profile_services.get_profile(session, actor)
+    reliability = await get_reliability(session, actor.id)
+    payload = {
+        "status": "success",
+        "has_profile": profile is not None,
+        "reliability": {
+            "score": float(reliability.score),
+            "band": reliability.band,
+            "is_provisional": reliability.is_provisional,
+            "contributions_total": reliability.contributions_total,
+            "contributions_on_time": reliability.contributions_on_time,
+            "contributions_late": reliability.contributions_late,
+            "contributions_outstanding": reliability.contributions_outstanding,
+            "cycles_completed": reliability.cycles_completed,
+        },
+    }
+    if profile is not None:
+        payload["profile"] = {
+            "monthly_capacity": _amount(profile.monthly_capacity),
+            "preferred_rhythm": profile.preferred_rhythm.value,
+            "savings_goal": profile.savings_goal.value,
+            "horizon_months": profile.horizon_months,
+            "group_size_preference": profile.group_size_preference.value,
+            "experience_level": profile.experience_level.value,
+            "turn_preference": profile.turn_preference.value,
+        }
+    return json.dumps(payload)
+
+
+async def _recommend_tontines(
+    session: AsyncSession, actor: User, arguments: dict
+) -> str:
+    raw_limit = arguments.get("limit")
+    limit = raw_limit if isinstance(raw_limit, int) else 5
+    search = arguments.get("search")
+    result = await discovery_services.discover_tontines(
+        session,
+        actor,
+        search=search if isinstance(search, str) else None,
+        limit=max(1, min(limit, 10)),
+        offset=0,
+    )
+    recommendations = [
+        {
+            "id": str(item.id),
+            "name": item.name,
+            "currency": item.currency,
+            "contribution_amount": (
+                _amount(item.contribution_amount)
+                if item.contribution_amount is not None
+                else None
+            ),
+            "frequency": item.frequency.value if item.frequency else None,
+            "monthly_equivalent": (
+                _amount(item.monthly_equivalent)
+                if item.monthly_equivalent is not None
+                else None
+            ),
+            "seats_left": item.seats_left,
+            "member_count": item.member_count,
+            "match_score": float(item.affinity_score),
+            "is_eligible": item.is_eligible,
+            "reasons": [reason.label for reason in item.reasons if reason.matched],
+        }
+        for item in result.items
+    ]
+    return json.dumps(
+        {
+            "status": "success",
+            "has_profile": result.has_profile,
+            "total": result.total,
+            "recommendations": recommendations,
+        }
+    )
+
+
 async def execute_tool(
     session: AsyncSession, actor: User, tool_name: str, arguments: dict
 ) -> str:
@@ -251,6 +370,10 @@ async def execute_tool(
             return await _list_my_contributions(session, actor, arguments)
         if tool_name == "list_my_payouts":
             return await _list_my_payouts(session, actor, arguments)
+        if tool_name == "get_my_saver_profile":
+            return await _get_my_saver_profile(session, actor)
+        if tool_name == "recommend_tontines":
+            return await _recommend_tontines(session, actor, arguments)
         return json.dumps(
             {"status": "error", "message": f"Outil inconnu : {tool_name}"}
         )

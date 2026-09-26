@@ -32,7 +32,7 @@ def test_alembic_structure_is_configured_without_credentials() -> None:
     assert (ALEMBIC_DIRECTORY / "script.py.mako").is_file()
     assert (ALEMBIC_DIRECTORY / "versions").is_dir()
     assert config.get_main_option("sqlalchemy.url") is None
-    assert scripts.get_current_head() == "a91c4e7d2b60"
+    assert scripts.get_current_head() == "c8f2a5d71e43"
 
 
 def test_alembic_offline_environment_uses_database_url(

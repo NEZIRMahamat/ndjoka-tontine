@@ -42,6 +42,8 @@ def tontine(actor):
         description=None,
         currency="EUR",
         max_members=None,
+        is_discoverable=True,
+        min_reliability_score=None,
         status=TontineStatus.DRAFT,
         created_by_user_id=actor.id,
         created_at=now,

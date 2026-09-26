@@ -20,6 +20,7 @@ def load_all_models() -> tuple[type[Base], ...]:
         ResendWebhookEvent,
     )
     from app.modules.payouts.models import Payout
+    from app.modules.profiles.models import SaverProfile
     from app.modules.tontines.models import Tontine
     from app.modules.users.models import User
 
@@ -37,4 +38,5 @@ def load_all_models() -> tuple[type[Base], ...]:
         OutboxEvent,
         EmailDelivery,
         ResendWebhookEvent,
+        SaverProfile,
     )

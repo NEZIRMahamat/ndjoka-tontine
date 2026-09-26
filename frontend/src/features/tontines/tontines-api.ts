@@ -16,8 +16,13 @@ export type Tontine = {
   created_at: string
   updated_at: string
   archived_at: string | null
+  is_discoverable: boolean
+  min_reliability_score: string | null
 }
-export type TontineInput = Pick<Tontine, 'name' | 'description' | 'currency' | 'max_members'>
+export type TontineInput = Pick<
+  Tontine,
+  'name' | 'description' | 'currency' | 'max_members' | 'is_discoverable' | 'min_reliability_score'
+>
 export type TontinePage = { items: Tontine[]; total: number; limit: number; offset: number }
 
 export type Membership = {
@@ -55,6 +60,8 @@ function isTontine(value: unknown): value is Tontine {
     (value.description === null || typeof value.description === 'string') &&
     (value.max_members === null || Number.isInteger(value.max_members)) &&
     (value.archived_at === null || typeof value.archived_at === 'string') &&
+    typeof value.is_discoverable === 'boolean' &&
+    (value.min_reliability_score === null || typeof value.min_reliability_score === 'string') &&
     ['draft', 'active', 'archived'].includes(String(value.status))
 }
 

@@ -1,13 +1,16 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     Uuid,
@@ -35,8 +38,20 @@ class Tontine(Base):
             "(status = 'archived') = (archived_at IS NOT NULL)",
             name="archive_consistency",
         ),
+        CheckConstraint(
+            "min_reliability_score IS NULL "
+            "OR (min_reliability_score >= 0 AND min_reliability_score <= 1)",
+            name="min_reliability_range",
+        ),
         Index(
             "ix_tontines_creator_created_id", "created_by_user_id", "created_at", "id"
+        ),
+        Index(
+            "ix_tontines_discoverable",
+            "status",
+            "created_at",
+            "id",
+            postgresql_where=text("is_discoverable"),
         ),
     )
 
@@ -49,6 +64,12 @@ class Tontine(Base):
         String(3), nullable=False, server_default=text("'EUR'")
     )
     max_members: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_discoverable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    min_reliability_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(4, 3), nullable=True
+    )
     status: Mapped[TontineStatus] = mapped_column(
         Enum(
             TontineStatus,

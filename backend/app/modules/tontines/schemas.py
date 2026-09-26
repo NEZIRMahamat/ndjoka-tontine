@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -30,6 +31,7 @@ def currency_code(value: object) -> str:
 Name = Annotated[str, Field(min_length=3, max_length=120), BeforeValidator(strip_text)]
 Currency = Annotated[str, BeforeValidator(currency_code)]
 MemberLimit = Annotated[int, Field(strict=True, ge=2, le=2_147_483_647)]
+ReliabilityGate = Annotated[Decimal, Field(ge=0, le=1, decimal_places=3)]
 Description = Annotated[
     str | None,
     Field(max_length=5000),
@@ -43,6 +45,8 @@ class TontineCreate(BaseModel):
     description: Description = None
     currency: Currency = "EUR"
     max_members: MemberLimit | None = None
+    is_discoverable: bool = False
+    min_reliability_score: ReliabilityGate | None = None
 
 
 class TontineUpdate(BaseModel):
@@ -51,8 +55,10 @@ class TontineUpdate(BaseModel):
     description: Description = None
     currency: Currency | None = None
     max_members: MemberLimit | None = None
+    is_discoverable: bool | None = None
+    min_reliability_score: ReliabilityGate | None = None
 
-    @field_validator("name", "currency", mode="before")
+    @field_validator("name", "currency", "is_discoverable", mode="before")
     @classmethod
     def reject_explicit_null(cls, value: object) -> object:
         if value is None:
@@ -67,6 +73,8 @@ class TontineRead(BaseModel):
     description: str | None
     currency: str
     max_members: int | None
+    is_discoverable: bool
+    min_reliability_score: Decimal | None
     status: TontineStatus
     created_by_user_id: UUID
     created_at: datetime

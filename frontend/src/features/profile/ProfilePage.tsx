@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { messageOf } from '@/lib/http'
 import { deactivateCurrentUser, updateCurrentUser } from '@/features/profile/profile-api'
+import SaverProfileSection from '@/features/profile/SaverProfileSection'
 
 const roleLabels = { user: 'Utilisateur', support: 'Support', platform_admin: 'Administrateur' }
 
@@ -85,7 +87,18 @@ export default function ProfilePage() {
         </Badge>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(240px,0.6fr)_minmax(0,1.4fr)]">
+      <Tabs defaultValue="savings">
+        <TabsList>
+          <TabsTrigger value="savings">Mon épargne</TabsTrigger>
+          <TabsTrigger value="account">Mon compte</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="savings" className="mt-6">
+          <SaverProfileSection />
+        </TabsContent>
+
+        <TabsContent value="account" className="mt-6 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(240px,0.6fr)_minmax(0,1.4fr)]">
         <Card>
           <CardContent className="flex flex-col items-center pt-6 text-center">
             <Avatar className="h-20 w-20">
@@ -155,21 +168,23 @@ export default function ProfilePage() {
             ) : null}
           </CardContent>
         </Card>
-      </div>
-
-      <Card className="border-destructive/30">
-        <CardContent className="flex flex-col items-start justify-between gap-4 pt-6 sm:flex-row sm:items-center">
-          <div>
-            <h3 className="text-sm font-semibold text-destructive">Zone sensible</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              La désactivation est logique : vos données sont conservées, mais l’accès métier est bloqué.
-            </p>
           </div>
-          <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" disabled={saving} onClick={deactivate}>
-            Désactiver mon compte
-          </Button>
-        </CardContent>
-      </Card>
+
+          <Card className="border-destructive/30">
+            <CardContent className="flex flex-col items-start justify-between gap-4 pt-6 sm:flex-row sm:items-center">
+              <div>
+                <h3 className="text-sm font-semibold text-destructive">Zone sensible</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  La désactivation est logique : vos données sont conservées, mais l’accès métier est bloqué.
+                </p>
+              </div>
+              <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10" disabled={saving} onClick={deactivate}>
+                Désactiver mon compte
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

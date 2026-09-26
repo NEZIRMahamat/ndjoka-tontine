@@ -34,6 +34,8 @@ export default function TontinesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [discoverable, setDiscoverable] = useState(false)
+  const [minScore, setMinScore] = useState('none')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -71,8 +73,12 @@ export default function TontinesPage() {
         description: String(data.get('description')).trim() || null,
         currency: String(data.get('currency')).trim().toUpperCase(),
         max_members: data.get('max_members') ? Number(data.get('max_members')) : null,
+        is_discoverable: discoverable,
+        min_reliability_score: discoverable && minScore !== 'none' ? minScore : null,
       })
       form.reset()
+      setDiscoverable(false)
+      setMinScore('none')
       setOffset(0)
       setReload((value) => value + 1)
       toast.success(`« ${tontine.name} » a été créée avec votre adhésion propriétaire.`)
@@ -151,6 +157,38 @@ export default function TontinesPage() {
                   <Label htmlFor="tontine-max-members">Capacité max.</Label>
                   <Input id="tontine-max-members" name="max_members" type="number" min={2} step={1} placeholder="Illimitée" />
                 </div>
+              </div>
+              <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3">
+                <label className="flex items-start gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                    checked={discoverable}
+                    onChange={(event) => setDiscoverable(event.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium text-foreground">Visible dans l’Explorer</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Les épargnants dont le profil correspond pourront la rejoindre directement.
+                    </span>
+                  </span>
+                </label>
+                {discoverable ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="tontine-min-score">Exigence de fiabilité</Label>
+                    <Select value={minScore} onValueChange={setMinScore}>
+                      <SelectTrigger id="tontine-min-score" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Ouverte à tous</SelectItem>
+                        <SelectItem value="0.450">Score moyen minimum</SelectItem>
+                        <SelectItem value="0.650">Bon score minimum</SelectItem>
+                        <SelectItem value="0.800">Excellent score minimum</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </div>
               <Button type="submit" className="w-full">
                 Créer la tontine

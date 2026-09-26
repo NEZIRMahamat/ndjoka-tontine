@@ -63,6 +63,14 @@ export default function TontineWorkspace() {
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
   const [inviteRole, setInviteRole] = useState<Exclude<MembershipRole, 'owner'>>('member')
+  const [editDiscoverable, setEditDiscoverable] = useState(false)
+  const [editMinScore, setEditMinScore] = useState('none')
+
+  useEffect(() => {
+    if (!tontine) return
+    setEditDiscoverable(tontine.is_discoverable)
+    setEditMinScore(tontine.min_reliability_score ?? 'none')
+  }, [tontine])
 
   useEffect(() => {
     if (!tontineId) return
@@ -124,6 +132,9 @@ export default function TontineWorkspace() {
         description: String(data.get('description')).trim() || null,
         ...(tontine?.status === 'draft' ? { currency: String(data.get('currency')).trim().toUpperCase() } : {}),
         max_members: data.get('max_members') ? Number(data.get('max_members')) : null,
+        is_discoverable: editDiscoverable,
+        min_reliability_score:
+          editDiscoverable && editMinScore !== 'none' ? editMinScore : null,
       })
       setTontine(updated)
       toast.success('Informations de la tontine mises à jour.')
@@ -283,6 +294,18 @@ export default function TontineWorkspace() {
                   <SummaryItem label="Devise" value={tontine.currency} />
                   <SummaryItem label="Capacité" value={tontine.max_members ? String(tontine.max_members) : 'Illimitée'} />
                   <SummaryItem label="Création" value={new Date(tontine.created_at).toLocaleDateString('fr-FR')} />
+                  <SummaryItem
+                    label="Visibilité"
+                    value={tontine.is_discoverable ? 'Ouverte dans l’Explorer' : 'Sur invitation'}
+                  />
+                  <SummaryItem
+                    label="Fiabilité exigée"
+                    value={
+                      tontine.min_reliability_score
+                        ? `${Math.round(Number(tontine.min_reliability_score) * 100)} / 100`
+                        : 'Aucune'
+                    }
+                  />
                 </dl>
               </CardContent>
             </Card>
@@ -312,6 +335,38 @@ export default function TontineWorkspace() {
                       <div className="space-y-1.5">
                         <Label htmlFor="edit-max-members">Capacité</Label>
                         <Input id="edit-max-members" name="max_members" type="number" min={2} defaultValue={tontine.max_members ?? ''} />
+                      </div>
+                      <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3">
+                        <label className="flex items-start gap-3 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 accent-primary"
+                            checked={editDiscoverable}
+                            onChange={(event) => setEditDiscoverable(event.target.checked)}
+                          />
+                          <span>
+                            <span className="font-medium text-foreground">Visible dans l’Explorer</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              Les épargnants compatibles peuvent la rejoindre sans invitation.
+                            </span>
+                          </span>
+                        </label>
+                        {editDiscoverable ? (
+                          <div className="space-y-1.5">
+                            <Label htmlFor="edit-min-score">Exigence de fiabilité</Label>
+                            <Select value={editMinScore} onValueChange={setEditMinScore}>
+                              <SelectTrigger id="edit-min-score" className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Ouverte à tous</SelectItem>
+                                <SelectItem value="0.450">Score moyen minimum</SelectItem>
+                                <SelectItem value="0.650">Bon score minimum</SelectItem>
+                                <SelectItem value="0.800">Excellent score minimum</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
                       </div>
                       <Button type="submit" size="sm">
                         Enregistrer
