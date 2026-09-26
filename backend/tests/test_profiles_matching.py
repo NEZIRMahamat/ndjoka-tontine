@@ -160,9 +160,7 @@ def test_missing_profile_returns_neutral_score_and_invitation():
 
 
 def test_tontine_without_cycle_stays_neutral_on_budget():
-    score, reasons = score_affinity(
-        profile(), TontineFacts(None, None, None, 0)
-    )
+    score, reasons = score_affinity(profile(), TontineFacts(None, None, None, 0))
     assert Decimal("0") <= score <= Decimal("1")
     assert {reason.criterion for reason in reasons} == {
         "budget",

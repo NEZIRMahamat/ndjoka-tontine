@@ -1,39 +1,42 @@
-# Contrat métier Cycles et tours — Sprint 4
+# Module cycles
 
-Un cycle appartient à une tontine et organise exactement un tour par adhésion
-active. Les montants utilisent `Decimal`/`NUMERIC(18, 2)` et les échéances sont
-calculées dans le fuseau IANA du cycle, puis enregistrées en UTC.
+Un cycle organise la rotation d'une tontine : un tour par membre actif, avec
+un montant et une fréquence de cotisation.
 
-## États et transitions
+## États
 
 ```text
 draft -> scheduled -> active -> completed
-  |          |          |
-  +----------+----------+-> cancelled
+draft | scheduled | active -> cancelled
 ```
 
-- un seul cycle peut être `active` par tontine ;
-- une tontine archivée ne reçoit aucun nouveau cycle ;
-- le calendrier doit contenir tous les membres actifs, une seule fois, avant
-  la planification ;
-- seuls les brouillons sont modifiables et réordonnables ;
-- montant, fréquence, date, fuseau, ordre et `beneficiary_contributes` sont
-  verrouillés après la planification ;
-- owner et manager gèrent le cycle ; seul l'owner peut l'annuler ; tous les
-  membres actifs peuvent le consulter.
+## Règles
 
-Les fréquences MVP sont `weekly` et `monthly`. Pour une fréquence mensuelle,
-une date inexistante dans le mois cible est ramenée au dernier jour de ce mois.
+- Un seul cycle `active` par tontine.
+- Le calendrier doit contenir chaque membre actif exactement une fois avant
+  la planification. Un bénéficiaire ne reçoit qu'une fois par cycle.
+- Seuls les brouillons sont modifiables et réordonnables. Montant, fréquence,
+  date de début, fuseau, ordre et `beneficiary_contributes` sont figés dès
+  la planification.
+- Fréquences : `weekly` et `monthly`. En mensuel, un jour absent du mois cible
+  est ramené au dernier jour du mois.
+- Les échéances sont calculées dans le fuseau IANA du cycle, puis stockées
+  en UTC.
+- L'activation passe la tontine en `active` et génère, dans la même
+  transaction, les cotisations et les versements attendus.
+- `owner` et `manager` gèrent le cycle ; seul `owner` peut l'annuler.
 
 ## API
 
-La collection `/api/v1/tontines/{tontine_id}/cycles` expose `POST` et `GET`.
-Le détail `/{cycle_id}` expose `GET` et `PATCH`. Les actions disponibles sont
-`turns/generate`, le remplacement atomique de l'ordre via `PUT /turns`, puis
-`schedule`, `activate`, `complete` et `cancel` via `POST`.
+Base : `/api/v1/tontines/{tontine_id}/cycles`
 
-L'activation passe une tontine brouillon à `active` et génère dans la même
-transaction les obligations de cotisation du Sprint 5 et les versements
-attendus du Sprint 6. Une tontine archivée interdit désormais toutes les
-écritures sur ses cycles. Les participants sont vérifiés par identité avant
-la planification et l'activation, puis restent figés dans le calendrier.
+| Méthode | Route | Action |
+| --- | --- | --- |
+| `POST`, `GET` | base | Création, liste |
+| `GET`, `PATCH` | `/{cycle_id}` | Détail, modification du brouillon |
+| `POST` | `/{cycle_id}/turns/generate` | Génération des tours |
+| `PUT` | `/{cycle_id}/turns` | Remplacement de l'ordre |
+| `POST` | `/{cycle_id}/schedule` | Planification |
+| `POST` | `/{cycle_id}/activate` | Activation |
+| `POST` | `/{cycle_id}/complete` | Clôture |
+| `POST` | `/{cycle_id}/cancel` | Annulation |

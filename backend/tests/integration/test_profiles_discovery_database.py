@@ -71,13 +71,9 @@ def test_saver_profile_http_lifecycle(test_database_url):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                assert (
-                    await client.get("/api/v1/me/saver-profile")
-                ).status_code == 404
+                assert (await client.get("/api/v1/me/saver-profile")).status_code == 404
 
-                saved = await client.put(
-                    "/api/v1/me/saver-profile", json=VALID_PROFILE
-                )
+                saved = await client.put("/api/v1/me/saver-profile", json=VALID_PROFILE)
                 assert saved.status_code == 200
                 assert saved.json()["savings_goal"] == "project"
 
@@ -113,18 +109,14 @@ def test_saver_profile_http_lifecycle(test_database_url):
                 assert (
                     await client.delete("/api/v1/me/saver-profile")
                 ).status_code == 204
-                assert (
-                    await client.get("/api/v1/me/saver-profile")
-                ).status_code == 404
+                assert (await client.get("/api/v1/me/saver-profile")).status_code == 404
 
                 # Le profil est strictement personnel.
                 other = {"X-Test-Subject": "auth0|other"}
                 await client.put(
                     "/api/v1/me/saver-profile", json=VALID_PROFILE, headers=other
                 )
-                assert (
-                    await client.get("/api/v1/me/saver-profile")
-                ).status_code == 404
+                assert (await client.get("/api/v1/me/saver-profile")).status_code == 404
         finally:
             app.dependency_overrides.clear()
 
@@ -320,7 +312,9 @@ def test_discovery_excludes_joined_and_ranks_by_affinity(test_database_url):
                 assert any(reason["matched"] for reason in top["reasons"])
 
                 gated_item = next(
-                    item for item in body["items"] if item["name"] == "Tontine exigeante"
+                    item
+                    for item in body["items"]
+                    if item["name"] == "Tontine exigeante"
                 )
                 assert gated_item["is_eligible"] is False
                 assert gated_item["ineligibility_reason"]

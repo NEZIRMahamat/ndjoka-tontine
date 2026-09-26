@@ -74,10 +74,14 @@ def _explain(facts: ReliabilityFacts, score: Decimal, provisional: bool) -> str:
     if facts.contributions_late:
         parts.append(f"{facts.contributions_late} règlement(s) en retard")
     if facts.contributions_outstanding:
-        parts.append(f"{facts.contributions_outstanding} échéance(s) non régularisée(s)")
+        parts.append(
+            f"{facts.contributions_outstanding} échéance(s) non régularisée(s)"
+        )
     if facts.cycles_completed:
         parts.append(f"{facts.cycles_completed} cycle(s) mené(s) à terme")
-    suffix = " Score encore provisoire faute d'historique suffisant." if provisional else ""
+    suffix = (
+        " Score encore provisoire faute d'historique suffisant." if provisional else ""
+    )
     return f"Score {score} calculé sur : " + ", ".join(parts) + "." + suffix
 
 

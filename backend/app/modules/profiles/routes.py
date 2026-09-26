@@ -35,7 +35,9 @@ Actor = Annotated[User, Depends(get_current_active_user)]
 async def read_profile(session: Session, actor: Actor) -> SaverProfileRead:
     profile = await services.get_profile(session, actor)
     if profile is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profil d'épargnant non renseigné")
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Profil d'épargnant non renseigné"
+        )
     return SaverProfileRead.model_validate(profile)
 
 

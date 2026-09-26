@@ -275,7 +275,7 @@ def test_post_me_deactivate_returns_logically_deactivated_profile(
     deactivate.assert_awaited_once_with(session, user)
 
 
-@pytest.mark.parametrize("method", ["PATCH", "POST"])
+@pytest.mark.parametrize("method", ["PATCH", "POST", "PUT", "DELETE"])
 def test_me_cors_preflight_allows_profile_mutations(
     client: TestClient,
     method: str,

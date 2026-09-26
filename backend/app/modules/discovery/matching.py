@@ -79,8 +79,16 @@ def _rhythm_fit(
     if frequency is None:
         return NEUTRAL_SCORE, False, "Rythme pas encore défini"
     if frequency.value == preferred.value:
-        return Decimal("1"), True, f"Rythme {frequency.value} conforme à votre préférence"
-    return Decimal("0.400"), False, f"Rythme {frequency.value} différent de votre préférence"
+        return (
+            Decimal("1"),
+            True,
+            f"Rythme {frequency.value} conforme à votre préférence",
+        )
+    return (
+        Decimal("0.400"),
+        False,
+        f"Rythme {frequency.value} différent de votre préférence",
+    )
 
 
 def _group_fit(

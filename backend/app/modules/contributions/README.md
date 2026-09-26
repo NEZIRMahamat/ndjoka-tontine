@@ -1,43 +1,43 @@
-# Contrat métier Cotisations — Sprint 5
+# Module contributions
 
-Une cotisation est une obligation métier associée à un cycle, un tour et une
-adhésion. Elle ne déclenche aucun encaissement réel et ne conserve aucune donnée
-bancaire ou secret de paiement.
+Obligations de cotisation d'un cycle. Une cotisation est déclarative : aucun
+encaissement n'est effectué et aucune donnée bancaire n'est stockée.
 
-## Génération et états
+## Génération
 
-L'activation d'un cycle génère les obligations de manière idempotente : `N²`
-si le bénéficiaire cotise à son propre tour, sinon `N × (N - 1)`. La paire
-`(turn_id, membership_id)` est unique.
-Les participants sont ceux du calendrier figé, pas les nouvelles adhésions
-ultérieures. Un calendrier planifié dont les membres ont changé est refusé.
+L'activation d'un cycle génère une cotisation par couple (tour, membre), de
+façon idempotente : `N x N` si le bénéficiaire cotise à son propre tour,
+`N x (N - 1)` sinon. Les participants sont ceux du calendrier figé.
+
+## États
 
 ```text
 pending -> declared -> confirmed
-   ^           |
-   +-----------+-> rejected -> declared
-pending/rejected -> late (état calculé après l'échéance)
-pending/declared/rejected -> cancelled (annulation du cycle)
+declared -> rejected -> declared
+pending | declared | rejected -> cancelled   (annulation du cycle)
 ```
 
-`late` n'est pas stocké : il est calculé à la lecture. Une cotisation confirmée
-est immuable et reste dans l'historique lors de l'annulation du cycle.
+- `late` n'est pas stocké : il est calculé à la lecture pour une cotisation
+  `pending` ou `rejected` dont l'échéance est passée.
+- Une cotisation `confirmed` est immuable.
+- La confirmation met à jour le versement du tour dans la même transaction.
 
-Le membre concerné déclare sa propre cotisation. Owner, manager et treasurer
-consultent le suivi collectif et peuvent confirmer ou rejeter une déclaration.
-Owner et manager peuvent relancer explicitement la génération idempotente.
+## Permissions
+
+- Le membre concerné déclare sa propre cotisation.
+- `owner`, `manager` et `treasurer` consultent le suivi collectif, confirment
+  ou rejettent.
+- `owner` et `manager` peuvent relancer la génération.
 
 ## API
 
-- `GET /api/v1/me/contributions` : échéancier personnel filtrable ;
-- `GET /api/v1/contributions/{contribution_id}` : détail autorisé ;
-- `POST /api/v1/contributions/{id}/declare|confirm|reject` : transitions ;
-- `GET /api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions` : suivi
-  collectif paginé et filtrable ;
-- `GET .../contributions/summary` : montants et compteurs agrégés ;
-- `POST .../contributions/generate` : génération idempotente.
-
-Une tontine archivée bloque toute écriture. La confirmation actualise le
-montant disponible et l'éligibilité du versement dans la même transaction.
-Le filtre pending/rejected exclut les retards ; les synthèses utilisent une
-agrégation SQL sans limite arbitraire de lignes.
+| Méthode | Route |
+| --- | --- |
+| `GET` | `/api/v1/me/contributions` |
+| `GET` | `/api/v1/contributions/{contribution_id}` |
+| `POST` | `/api/v1/contributions/{contribution_id}/declare` |
+| `POST` | `/api/v1/contributions/{contribution_id}/confirm` |
+| `POST` | `/api/v1/contributions/{contribution_id}/reject` |
+| `GET` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions` |
+| `GET` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions/summary` |
+| `POST` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions/generate` |

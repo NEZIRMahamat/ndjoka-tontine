@@ -1,223 +1,195 @@
-# Infrastructure PostgreSQL
+# Infrastructure
 
-Ce dossier démarre PostgreSQL 17 pour le développement local et, à la demande,
-une seconde instance éphémère réservée aux tests d'intégration. Le backend
-FastAPI et le frontend Vite continuent de s'exécuter directement sur la machine.
-Il documente également la base PostgreSQL gérée sur AWS RDS et l'application de
-ses migrations Alembic. Le fichier Compose reste exclusivement local : il ne
-doit pas être déployé sur Render.
+Ce dossier décrit les bases PostgreSQL du projet :
 
-## Configuration
+- en développement et en test, des conteneurs Docker définis dans
+  `compose.yaml` ;
+- en production, une instance AWS RDS.
 
-Depuis `infra/`, créez au besoin la configuration locale :
+L'API et le frontend ne sont pas conteneurisés. Ils tournent directement sur
+le poste en local, puis sur Render et Vercel en production
+([README racine](../README.md#production)).
+
+| Environnement | Base | Adresse | Données |
+| --- | --- | --- | --- |
+| Développement | Docker `postgres` (PostgreSQL 17) | `127.0.0.1:5433/ndjoka_db` | Volume `postgres_data`, persistant |
+| Tests | Docker `postgres_test` (PostgreSQL 17) | `127.0.0.1:5434/ndjoka_test` | En mémoire, perdues à l'arrêt |
+| Production | AWS RDS (PostgreSQL 17) | `<endpoint-rds>:5432/ndjoka_db` | Gérées par RDS, connexion TLS |
+
+Les ports sont liés à `127.0.0.1` : les conteneurs ne sont pas exposés sur le
+réseau.
+
+## Développement
+
+### Configuration
 
 ```bash
+cd infra
 cp .env.example .env
 ```
 
-Modifiez ensuite `POSTGRES_PASSWORD` dans `.env`. Ce fichier est ignoré par Git
-et ne doit jamais être versionné. Le port hôte par défaut est `5433`, car le
-port PostgreSQL standard `5432` peut déjà être occupé sur la machine. Dans le
-conteneur, PostgreSQL écoute toujours sur `5432`.
+| Variable | Valeur par défaut |
+| --- | --- |
+| `POSTGRES_DB` | `ndjoka_db` |
+| `POSTGRES_USER` | `ndjoka_postgres_admin` |
+| `POSTGRES_PASSWORD` | à définir |
+| `POSTGRES_PORT` | `5433` (évite un conflit avec un PostgreSQL local sur 5432) |
 
-## Démarrage et vérification
+`DATABASE_URL` dans `backend/.env.dev` doit reprendre ces valeurs :
 
-```bash
-docker compose up -d
-docker compose ps
-docker compose exec postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "SHOW server_version;"'
+```text
+postgresql+asyncpg://ndjoka_postgres_admin:<mot-de-passe>@127.0.0.1:5433/ndjoka_db
 ```
 
-Le service doit apparaître avec l'état `healthy` et la dernière commande doit
-retourner une version majeure `17`.
+### Commandes
 
-## PostgreSQL éphémère pour les tests
+À lancer depuis `infra/` :
 
-Le profil Compose `test` démarre une instance totalement séparée :
+```bash
+docker compose up -d postgres        # démarrer
+docker compose ps                    # état (doit afficher healthy)
+docker compose logs -f postgres      # journaux
+docker compose stop postgres         # arrêter, données conservées
+docker compose down                  # supprimer le conteneur, données conservées
+```
+
+Se connecter à la base :
+
+```bash
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Appliquer les migrations, depuis `backend/` :
+
+```bash
+uv run alembic upgrade head
+```
+
+Repartir d'une base vide :
+
+```bash
+docker compose down -v               # supprime définitivement le volume
+docker compose up -d postgres
+cd ../backend && uv run alembic upgrade head
+```
+
+Le mot de passe n'est lu qu'à la création du volume. Pour le changer, il faut
+recréer le volume avec `down -v`.
+
+## Tests
+
+La base de test est isolée de la base de développement. Ses données sont
+stockées en mémoire.
 
 ```bash
 docker compose --profile test up -d postgres_test
-docker compose --profile test ps postgres_test
 ```
 
-Elle écoute uniquement sur `127.0.0.1:5434`, utilise la base et le rôle
-`ndjoka_test`, et conserve ses données dans un `tmpfs`. Les identifiants fixes
-du service sont exclusivement locaux et ne doivent jamais être réutilisés dans
-un environnement distant.
-
-Depuis `backend/`, lancez ensuite :
+Depuis `backend/` :
 
 ```bash
 TEST_DATABASE_URL=postgresql+asyncpg://ndjoka_test:ndjoka_test@127.0.0.1:5434/ndjoka_test \
-  uv run pytest -m integration -v
+  uv run pytest -q
 ```
 
-Pour arrêter et supprimer uniquement ce conteneur, sans toucher à PostgreSQL de
-développement :
+Arrêter la base de test :
 
 ```bash
-docker compose --profile test stop postgres_test
-docker compose --profile test rm -f postgres_test
+docker compose --profile test rm -sf postgres_test
 ```
 
-La suppression du conteneur efface son `tmpfs`. La base de développement, son
-conteneur `postgres` et le volume `postgres_data` ne sont pas concernés.
+## Production : AWS RDS
 
-Pour consulter les journaux :
+### Configuration
+
+- Moteur : PostgreSQL 17, base `ndjoka_db`, port 5432.
+- Connexion chiffrée obligatoire (`ssl=require`).
+- Security Group : TCP 5432 ouvert pour Render. L'accès depuis un poste
+  (IP `/32`) s'ouvre uniquement pendant une intervention, puis se referme.
+
+URL utilisée par l'API (variable `DATABASE_URL` sur Render) :
+
+```text
+postgresql+asyncpg://<utilisateur>:<mot-de-passe>@<endpoint-rds>:5432/ndjoka_db?ssl=require
+```
+
+Les caractères spéciaux du mot de passe (`@`, `:`, `/`, `#`, `%`) doivent
+être encodés en URL.
+
+Pour les interventions depuis un poste, la même URL est placée dans
+`backend/.env.prod`. Ce fichier n'est jamais versionné.
+
+### Vérifier l'accès
 
 ```bash
-docker compose logs postgres
+nc -vz <endpoint-rds> 5432
 ```
 
-Pour arrêter PostgreSQL tout en conservant les données :
+En cas d'échec, vérifier que l'IP publique du poste est autorisée dans le
+Security Group.
+
+Pour une session `psql`, utiliser le format libpq (sans `+asyncpg`) :
 
 ```bash
-docker compose down
+psql "postgresql://<utilisateur>@<endpoint-rds>:5432/ndjoka_db?sslmode=require"
 ```
 
-Les données sont persistées dans le volume Docker `postgres_data`. La commande
-`docker compose down -v` supprime définitivement ce volume et ne doit être
-utilisée que pour réinitialiser volontairement la base locale.
+### Appliquer les migrations
 
-## Déployer PostgreSQL sur AWS RDS
+Les migrations ne sont pas lancées par le déploiement Render. Il faut les
+appliquer avant de pousser une version qui en dépend.
 
-Utilisez une instance RDS PostgreSQL dans une région proche de l'hébergement du
-backend. Les identifiants du fichier local `infra/.env` ne sont pas réutilisés
-en production.
+Depuis `backend/`, avec `backend/.env.prod` renseigné :
 
-Configurez le Security Group RDS pour autoriser TCP `5432` depuis le backend
-Render et, temporairement, depuis votre IP publique afin d'exécuter Alembic.
-Dans les variables d'environnement du Web Service FastAPI, configurez :
-
-```dotenv
-DATABASE_URL=postgresql+asyncpg://<utilisateur>:<mot-de-passe-encode>@<hote-rds>:5432/ndjoka_db?ssl=require
-```
-
-Le backend accepte les schémas `postgres://` et `postgresql://`, les convertit
-vers `postgresql+asyncpg://` et adapte le paramètre `sslmode` pour `asyncpg`.
-Ne placez jamais cette URL dans `.env.example`, Git, une capture d'écran ou un
-ticket : elle contient les identifiants de la base.
-
-## Migrer PostgreSQL AWS RDS avec Alembic
-
-Les migrations sont lancées explicitement depuis le poste local. Une commande
-Alembic lancée sans configuration explicite de
-l'environnement utilise `backend/.env.dev` et migre donc PostgreSQL Docker
-local, pas RDS.
-
-Avant la migration, poussez et synchronisez la version du code contenant les
-nouvelles révisions Alembic. Autorisez temporairement l'adresse IP du poste si
-la configuration réseau Render le demande.
-
-### Méthode principale : `APP_ENV=prod`
-
-`backend/.env.prod` contient déjà l'URL RDS dans `DATABASE_URL`. Il suffit donc
-de sélectionner cet environnement. Depuis `backend/`, sous zsh :
-
-```zsh
+```bash
 uv sync --locked
-
-nc -vz <hote-rds> 5432
-
 export APP_ENV=prod
-uv run --no-sync alembic current
+uv run --no-sync alembic current     # révision actuellement appliquée
 uv run --no-sync alembic upgrade head
-uv run --no-sync alembic current
-uv run --no-sync alembic check
+uv run --no-sync alembic current     # doit afficher (head)
+uv run --no-sync alembic check       # doit indiquer l'absence d'écart
 unset APP_ENV
 ```
 
-La commande `nc -vz` vérifie au préalable que le poste atteint bien le port
-PostgreSQL RDS avant de lancer Alembic. Si elle reste bloquée ou affiche un
-timeout, vérifiez la route réseau et le Security Group RDS.
+Sans `APP_ENV=prod`, Alembic cible la base Docker locale.
 
-### Méthode de secours : saisie manuelle de l'URL
+Sans fichier `.env.prod`, passer l'URL de façon ponctuelle, sans l'écrire dans
+l'historique du shell :
 
-Si `backend/.env.prod` n'est pas disponible sur le poste, ou pour cibler une
-URL différente sans modifier ce fichier, saisissez-la sans qu'elle soit
-affichée ni inscrite dans l'historique du terminal :
-
-```zsh
-cd backend
-read -s "DATABASE_URL?Collez l'External Database URL Render : "
-echo
+```bash
+read -s "DATABASE_URL?URL AWS RDS : "; echo    # zsh ; en bash : read -rsp "URL AWS RDS : " DATABASE_URL
 export DATABASE_URL
-
 uv run --no-sync alembic upgrade head
-uv run --no-sync alembic current
-uv run --no-sync alembic check
-
 unset DATABASE_URL
 ```
 
-La valeur collée après `read -s` reste invisible et n'est pas inscrite dans la
-ligne de commande. Il ne faut pas remplacer le texte de la question par l'URL :
-exécutez d'abord `read -s`, collez l'URL lorsque le terminal la demande, puis
-appuyez sur Entrée.
+Si le poste ne peut pas joindre RDS, préfixer temporairement le Start Command
+Render par `uv run --no-sync alembic upgrade head && `, déployer, vérifier les
+journaux, puis retirer le préfixe.
 
-### Méthode de secours : accès externe indisponible
+Règles :
 
-Si `nc -vz` échoue durablement depuis le poste (accès externe bloqué), lancez
-la migration une seule fois via le Start Command du Web Service Render, qui
-utilise l'Internal Database URL sur le réseau privé Render :
+- ne jamais lancer `alembic downgrade` en production ;
+- créer un snapshot RDS avant une migration qui modifie ou supprime des
+  données ;
+- appliquer les migrations du code qui va être déployé, pas d'une autre
+  branche.
 
-```bash
-uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
+### Désigner le premier administrateur
 
-Déclenchez un déploiement manuel, vérifiez dans les logs que les révisions
-s'appliquent jusqu'à la tête attendue, puis restaurez immédiatement le Start
-Command habituel :
+1. Se connecter une fois sur `https://app.ndjoka-tontine.com` pour créer le
+   compte en base.
+2. Récupérer l'identifiant `auth0_sub` (`auth0|...`) dans Auth0, rubrique
+   User Management > Users.
+3. Dans `psql` sur la base RDS :
 
-```bash
-uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
+   ```sql
+   UPDATE users
+   SET global_role = 'platform_admin', updated_at = CURRENT_TIMESTAMP
+   WHERE auth0_sub = 'auth0|...';
+   ```
 
-Cette méthode reste ponctuelle : ne laissez pas Alembic dans la commande de
-démarrage de façon permanente.
+   Le résultat attendu est `UPDATE 1`.
 
-Pour la version `0.7.0`, `alembic current` doit afficher :
-
-```text
-e64ca02b8d39 (head)
-```
-
-`alembic check` doit ensuite afficher :
-
-```text
-No new upgrade operations detected.
-```
-
-Cette tête inclut `c42a8e0f6b17` (cycles et tours), puis `d53b9f1a7c28`
-(cotisations), puis `e64ca02b8d39` (versements manuels du Sprint 6).
-La migration ne génère pas les versements des anciens cycles : après
-redéploiement, un owner/manager utilise `POST .../cycles/{cycle_id}/payouts/generate`
-pour les cycles actifs ou terminés. Voir le
-[contrat Sprint 6](../backend/app/modules/payouts/README.md).
-
-Si l'une des commandes échoue, ne redéployez pas le backend avant d'avoir
-identifié la cause. N'exécutez jamais `alembic downgrade`, ne supprimez aucune
-table et ne réinitialisez pas la base distante pour corriger une migration sans
-procédure de sauvegarde et validation explicite.
-
-Après une migration réussie :
-
-1. vérifiez que le Web Service utilise toujours l'Internal Database URL ;
-2. redéployez FastAPI avec la même version du code que celle utilisée par
-   Alembic ;
-3. contrôlez `/api/v1/health`, puis une route utilisant PostgreSQL telle que
-   `/api/v1/me` avec un Access Token valide ;
-4. retirez l'autorisation IP externe devenue inutile ;
-5. vérifiez que `DATABASE_URL` n'est plus exportée dans le terminal avec
-   `[[ -z ${DATABASE_URL:-} ]] && echo "DATABASE_URL supprimée"`.
-
-Le Web Service ne lance volontairement pas Alembic dans sa commande de
-démarrage : cela évite une modification concurrente du schéma à chaque
-redémarrage ou réveil Render. Si une offre Render disposant d'une commande de
-pré-déploiement est utilisée plus tard, la migration pourra y être exécutée
-avec :
-
-```bash
-uv run --no-sync alembic upgrade head
-```
+Toujours cibler l'utilisateur par `auth0_sub`, jamais par e-mail. Les
+administrateurs suivants sont ensuite gérés depuis l'interface.

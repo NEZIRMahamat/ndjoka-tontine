@@ -158,9 +158,7 @@ def _amount(value: Decimal) -> float:
     return float(value)
 
 
-async def _list_my_tontines(
-    session: AsyncSession, actor: User, arguments: dict
-) -> str:
+async def _list_my_tontines(session: AsyncSession, actor: User, arguments: dict) -> str:
     status_value = arguments.get("status")
     status = TontineStatus(status_value) if status_value else None
     items, total = await tontine_services.list_tontines(
