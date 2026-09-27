@@ -185,8 +185,8 @@ def test_chat_falls_back_gracefully_on_moderation_error(client: TestClient) -> N
             headers={"Authorization": "******", "Origin": FRONTEND_ORIGIN},
         )
 
-    assert response.status_code == 200
-    assert "indisponible" in response.json()["reply"].lower()
+    assert response.status_code == 503
+    assert "indisponible" in response.json()["detail"].lower()
 
 
 def test_chat_falls_back_gracefully_on_agent_error(client: TestClient) -> None:
@@ -210,5 +210,5 @@ def test_chat_falls_back_gracefully_on_agent_error(client: TestClient) -> None:
             headers={"Authorization": "******", "Origin": FRONTEND_ORIGIN},
         )
 
-    assert response.status_code == 200
-    assert "indisponible" in response.json()["reply"].lower()
+    assert response.status_code == 503
+    assert "indisponible" in response.json()["detail"].lower()

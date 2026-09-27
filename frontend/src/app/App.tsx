@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { AlertTriangle, ArrowRight, Loader2 } from 'lucide-react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
@@ -7,14 +7,20 @@ import { AppLayout } from '@/app/AppLayout'
 import { CurrentUserProvider, useCurrentUser, useCurrentUserState } from '@/app/current-user-context'
 import ndjokaLogo from '@/assets/ndjoka_logo.svg'
 import { Button } from '@/components/ui/button'
-import AdminUsersPage from '@/features/admin/AdminUsersPage'
-import DashboardPage from '@/features/dashboard/DashboardPage'
-import ExplorerPage from '@/features/explorer/ExplorerPage'
-import NdjokaAIPage from '@/features/ai/NdjokaAIPage'
-import PaymentsPage from '@/features/payments/PaymentsPage'
-import ProfilePage from '@/features/profile/ProfilePage'
-import TontinesPage from '@/features/tontines/TontinesPage'
-import TontineWorkspace from '@/features/tontines/TontineWorkspace'
+const AdminUsersPage = lazy(() => import('@/features/admin/AdminUsersPage'))
+const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage'))
+const ExplorerPage = lazy(() => import('@/features/explorer/ExplorerPage'))
+const ExplorerTontineDetailPage = lazy(() => import('@/features/explorer/ExplorerTontineDetailPage'))
+const GuideDetailPage = lazy(() => import('@/features/explorer/GuideDetailPage'))
+const NdjokaAIPage = lazy(() => import('@/features/ai/NdjokaAIPage'))
+const PaymentsPage = lazy(() => import('@/features/payments/PaymentsPage'))
+const PaymentHistoryPage = lazy(() => import('@/features/payments/PaymentHistoryPage'))
+const PaymentDetailPage = lazy(() => import('@/features/payments/PaymentDetailPage'))
+const ProfilePage = lazy(() => import('@/features/profile/ProfilePage'))
+const TontinesPage = lazy(() => import('@/features/tontines/TontinesPage'))
+const CreateTontinePage = lazy(() => import('@/features/tontines/CreateTontinePage'))
+const TontineWorkspace = lazy(() => import('@/features/tontines/TontineWorkspace'))
+const TurnDetailPage = lazy(() => import('@/features/tontines/TurnDetailPage'))
 
 function Brand() {
   return <img src={ndjokaLogo} alt="Ndjoka" className="h-14 w-auto object-contain" />
@@ -113,26 +119,34 @@ function AuthenticatedApp() {
   if (state.status === 'error') return <ErrorScreen message={state.message} onRetry={refresh} />
 
   return (
-    <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/explorer" element={<ExplorerPage />} />
-        <Route path="/tontines" element={<TontinesPage />} />
-        <Route path="/tontines/:tontineId" element={<TontineWorkspace />} />
-        <Route path="/paiements" element={<PaymentsPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/ndjoka-ai" element={<NdjokaAIPage />} />
-        <Route
-          path="/admin/users"
-          element={
-            <AdminRoute>
-              <AdminUsersPage />
-            </AdminRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/explorer" element={<ExplorerPage />} />
+          <Route path="/explorer/guides/:slug" element={<GuideDetailPage />} />
+          <Route path="/explorer/:tontineId" element={<ExplorerTontineDetailPage />} />
+          <Route path="/tontines" element={<TontinesPage />} />
+          <Route path="/tontines/create" element={<CreateTontinePage />} />
+          <Route path="/tontines/:tontineId" element={<TontineWorkspace />} />
+          <Route path="/tontines/:tontineId/cycles/:cycleId/turns/:turnId" element={<TurnDetailPage />} />
+          <Route path="/paiements" element={<PaymentsPage />} />
+          <Route path="/paiements/historique" element={<PaymentHistoryPage />} />
+          <Route path="/paiements/historique/:type/:operationId" element={<PaymentDetailPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/ndjoka-ai" element={<NdjokaAIPage />} />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminUsersPage />
+              </AdminRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </Suspense>
   )
 }
 

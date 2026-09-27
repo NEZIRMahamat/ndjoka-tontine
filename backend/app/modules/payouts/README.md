@@ -58,3 +58,4 @@ Base cycle : `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/payouts`
 | `POST` | `/api/v1/payouts/{payout_id}/cancel` |
 
 `/me/payouts` liste les versements dont l'utilisateur est bénéficiaire.
+`order=desc` affiche les échéances récentes en premier (`asc` par défaut).

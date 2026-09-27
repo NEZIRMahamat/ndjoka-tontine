@@ -1,6 +1,6 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +15,7 @@ from app.modules.contributions.schemas import (
     ContributionRead,
     ContributionReject,
     ContributionSummary,
+    MonthlyConfirmedContribution,
 )
 from app.modules.cycles import services as cycle_services
 from app.modules.memberships.dependencies import CurrentMembership
@@ -43,9 +44,13 @@ Session = Annotated[AsyncSession, Depends(get_db_session)]
 Actor = Annotated[User, Depends(get_current_active_user)]
 
 
-def read_item(item) -> ContributionRead:
+def read_item(item, context: dict | None = None) -> ContributionRead:
     return ContributionRead.model_validate(
-        {**item.__dict__, "effective_status": services.effective_status(item)}
+        {
+            **item.__dict__,
+            "effective_status": services.effective_status(item),
+            **(context or {}),
+        }
     )
 
 
@@ -108,6 +113,27 @@ async def cycle_summary(
 
 
 @router.get(
+    "/me/contributions/monthly",
+    response_model=list[MonthlyConfirmedContribution],
+    summary="Cotisations confirmées par mois et devise",
+)
+async def monthly_mine(
+    session: Session, actor: Actor
+) -> list[MonthlyConfirmedContribution]:
+    now = datetime.now(UTC)
+    year = now.year if now.month > 5 else now.year - 1
+    month = ((now.month - 6) % 12) + 1
+    since = datetime(year, month, 1, tzinfo=UTC)
+    rows = await repositories.monthly_confirmed_contributions(session, actor.id, since)
+    return [
+        MonthlyConfirmedContribution(
+            month=period, currency=currency, confirmed_amount=amount, count=count
+        )
+        for period, currency, amount, count in rows
+    ]
+
+
+@router.get(
     "/me/contributions",
     response_model=ContributionList,
     summary="Lister mes cotisations",
@@ -118,17 +144,31 @@ async def list_mine(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
     status: EffectiveContributionStatus | None = None,
+    order: Literal["asc", "desc"] = "asc",
 ) -> ContributionList:
-    items, total = await repositories.list_user_contributions(
+    rows, total = await repositories.list_user_contributions_with_context(
         session,
         actor.id,
         limit=limit,
         offset=offset,
         status=status,
         now=datetime.now(UTC),
+        order=order,
     )
     return ContributionList(
-        items=[read_item(item) for item in items],
+        items=[
+            read_item(
+                item,
+                {
+                    "cycle_name": cycle_name,
+                    "cycle_sequence": cycle_sequence,
+                    "tontine_id": tontine_id,
+                    "tontine_name": tontine_name,
+                    "currency": currency,
+                },
+            )
+            for item, cycle_name, cycle_sequence, tontine_id, tontine_name, currency in rows
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -144,7 +184,23 @@ async def read(
     contribution_id: UUID, session: Session, actor: Actor
 ) -> ContributionRead:
     item, _ = await services.get_contribution(session, contribution_id, actor)
-    return read_item(item)
+    (
+        cycle_name,
+        cycle_sequence,
+        tontine_id,
+        tontine_name,
+        currency,
+    ) = await repositories.contribution_context(session, item.cycle_id)
+    return read_item(
+        item,
+        {
+            "cycle_name": cycle_name,
+            "cycle_sequence": cycle_sequence,
+            "tontine_id": tontine_id,
+            "tontine_name": tontine_name,
+            "currency": currency,
+        },
+    )
 
 
 @router.post(

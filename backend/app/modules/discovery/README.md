@@ -39,7 +39,8 @@ existante et score suffisant. Elle est tracée dans l'audit
 
 | Méthode | Route | Résultat |
 | --- | --- | --- |
-| `GET` | `/api/v1/discovery/tontines` | Liste classée ; paramètres `search`, `eligible_only`, `limit` (1 à 50), `offset` |
+| `GET` | `/api/v1/discovery/tontines` | Liste classée ; paramètres `search`, `frequency`, `eligible_only`, `limit` (1 à 50), `offset` |
+| `GET` | `/api/v1/discovery/tontines/{tontine_id}` | Détail de la tontine visible, avec score et éligibilité calculés |
 | `POST` | `/api/v1/discovery/tontines/{tontine_id}/join` | Adhésion (`201`) |
 
 Erreurs d'adhésion : `404` tontine introuvable ou privée, `403` score

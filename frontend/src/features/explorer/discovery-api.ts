@@ -38,7 +38,7 @@ export type DiscoveryResult = {
 function isReason(value: unknown): value is AffinityReason {
   return (
     isRecord(value) &&
-    typeof value.criterion === 'string' &&
+    ['budget', 'rhythm', 'group_size', 'horizon', 'profile'].includes(String(value.criterion)) &&
     typeof value.label === 'string' &&
     typeof value.matched === 'boolean'
   )
@@ -49,17 +49,40 @@ function isDiscovered(value: unknown): value is DiscoveredTontine {
   return (
     typeof value.id === 'string' &&
     typeof value.name === 'string' &&
+    (value.description === null || typeof value.description === 'string') &&
     typeof value.currency === 'string' &&
-    typeof value.member_count === 'number' &&
+    (value.max_members === null || Number.isInteger(value.max_members)) &&
+    Number.isInteger(value.member_count) &&
+    (value.seats_left === null || Number.isInteger(value.seats_left)) &&
+    (value.contribution_amount === null || typeof value.contribution_amount === 'string') &&
+    (value.frequency === null || value.frequency === 'weekly' || value.frequency === 'monthly') &&
+    (value.monthly_equivalent === null || typeof value.monthly_equivalent === 'string') &&
+    (value.min_reliability_score === null || typeof value.min_reliability_score === 'string') &&
+    typeof value.created_at === 'string' &&
     typeof value.affinity_score === 'string' &&
     typeof value.is_eligible === 'boolean' &&
+    (value.ineligibility_reason === null || typeof value.ineligibility_reason === 'string') &&
     Array.isArray(value.reasons) &&
     value.reasons.every(isReason)
   )
 }
 
+function isDiscoveryResult(value: unknown): value is DiscoveryResult {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isDiscovered) &&
+    Number.isInteger(value.total) &&
+    Number.isInteger(value.limit) &&
+    Number.isInteger(value.offset) &&
+    typeof value.has_profile === 'boolean' &&
+    typeof value.reliability_score === 'string'
+  )
+}
+
 export type DiscoveryQuery = {
   search?: string
+  frequency?: ContributionRhythm
   limit?: number
   offset?: number
   eligibleOnly?: boolean
@@ -72,22 +95,28 @@ export async function discoverTontines(
 ): Promise<DiscoveryResult> {
   const params = new URLSearchParams()
   if (query.search?.trim()) params.set('search', query.search.trim())
+  if (query.frequency) params.set('frequency', query.frequency)
   params.set('limit', String(query.limit ?? 20))
   params.set('offset', String(query.offset ?? 0))
   if (query.eligibleOnly) params.set('eligible_only', 'true')
 
   const payload = await apiRequest(accessToken, `/api/v1/discovery/tontines?${params}`, { signal })
-  if (
-    !isRecord(payload) ||
-    !Array.isArray(payload.items) ||
-    !payload.items.every(isDiscovered) ||
-    typeof payload.total !== 'number' ||
-    typeof payload.has_profile !== 'boolean' ||
-    typeof payload.reliability_score !== 'string'
-  ) {
+  if (!isDiscoveryResult(payload)) {
     throw new Error('La liste de tontines reçue est invalide')
   }
-  return payload as unknown as DiscoveryResult
+  return payload
+}
+
+export async function getDiscoveredTontine(
+  accessToken: string,
+  tontineId: string,
+  signal?: AbortSignal,
+): Promise<DiscoveredTontine> {
+  const payload = await apiRequest(
+    accessToken, `/api/v1/discovery/tontines/${encodeURIComponent(tontineId)}`, { signal },
+  )
+  if (!isDiscovered(payload)) throw new Error('La tontine reçue est invalide')
+  return payload
 }
 
 export async function joinTontine(accessToken: string, tontineId: string): Promise<void> {

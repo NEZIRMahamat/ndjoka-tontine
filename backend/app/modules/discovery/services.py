@@ -4,6 +4,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit.services import record
+from app.modules.cycles.enums import CycleFrequency
+from app.modules.cycles.models import Cycle
 from app.modules.discovery import repositories
 from app.modules.discovery.matching import (
     TontineFacts,
@@ -16,8 +18,10 @@ from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.memberships.services import MembershipError
 from app.modules.profiles import services as profile_services
+from app.modules.profiles.models import SaverProfile
 from app.modules.profiles.reliability import get_reliability
 from app.modules.tontines.enums import TontineStatus
+from app.modules.tontines.models import Tontine
 from app.modules.users.models import User
 
 
@@ -26,6 +30,7 @@ async def discover_tontines(
     actor: User,
     *,
     search: str | None = None,
+    frequency: CycleFrequency | None = None,
     limit: int = 20,
     offset: int = 0,
     eligible_only: bool = False,
@@ -34,50 +39,13 @@ async def discover_tontines(
     profile = await profile_services.get_profile(session, actor)
     reliability = await get_reliability(session, actor.id)
     rows = await repositories.list_discoverable_tontines(
-        session, actor.id, search=search
+        session, actor.id, search=search, frequency=frequency
     )
 
-    items: list[DiscoveredTontine] = []
-    for tontine, member_count, cycle in rows:
-        facts = TontineFacts(
-            contribution_amount=cycle.contribution_amount if cycle else None,
-            frequency=cycle.frequency if cycle else None,
-            max_members=tontine.max_members,
-            member_count=member_count,
-        )
-        affinity, reasons = score_affinity(profile, facts)
-        gate = tontine.min_reliability_score
-        eligible = gate is None or reliability.score >= gate
-        items.append(
-            DiscoveredTontine(
-                id=tontine.id,
-                name=tontine.name,
-                description=tontine.description,
-                currency=tontine.currency,
-                max_members=tontine.max_members,
-                member_count=member_count,
-                seats_left=(
-                    tontine.max_members - member_count
-                    if tontine.max_members is not None
-                    else None
-                ),
-                contribution_amount=facts.contribution_amount,
-                frequency=facts.frequency,
-                monthly_equivalent=monthly_equivalent(
-                    facts.contribution_amount, facts.frequency
-                ),
-                min_reliability_score=gate,
-                created_at=tontine.created_at,
-                affinity_score=affinity,
-                is_eligible=eligible,
-                ineligibility_reason=(
-                    None
-                    if eligible
-                    else "Cette tontine demande un score de fiabilité plus élevé"
-                ),
-                reasons=reasons,
-            )
-        )
+    items = [
+        _discovered(tontine, member_count, cycle, profile, reliability.score)
+        for tontine, member_count, cycle in rows
+    ]
 
     if eligible_only:
         items = [item for item in items if item.is_eligible]
@@ -92,6 +60,59 @@ async def discover_tontines(
         offset=offset,
         has_profile=profile is not None,
         reliability_score=Decimal(reliability.score),
+    )
+
+
+async def get_discoverable_tontine(
+    session: AsyncSession, actor: User, tontine_id: UUID
+) -> DiscoveredTontine:
+    row = await repositories.get_discoverable_tontine(session, actor.id, tontine_id)
+    if row is None:
+        raise MembershipError("Tontine introuvable ou non ouverte", 404)
+    profile = await profile_services.get_profile(session, actor)
+    reliability = await get_reliability(session, actor.id)
+    return _discovered(*row, profile, reliability.score)
+
+
+def _discovered(
+    tontine: Tontine,
+    member_count: int,
+    cycle: Cycle | None,
+    profile: SaverProfile | None,
+    reliability_score: Decimal,
+) -> DiscoveredTontine:
+    facts = TontineFacts(
+        contribution_amount=cycle.contribution_amount if cycle else None,
+        frequency=cycle.frequency if cycle else None,
+        max_members=tontine.max_members,
+        member_count=member_count,
+    )
+    affinity, reasons = score_affinity(profile, facts)
+    gate = tontine.min_reliability_score
+    eligible = gate is None or reliability_score >= gate
+    return DiscoveredTontine(
+        id=tontine.id,
+        name=tontine.name,
+        description=tontine.description,
+        currency=tontine.currency,
+        max_members=tontine.max_members,
+        member_count=member_count,
+        seats_left=tontine.max_members - member_count
+        if tontine.max_members is not None
+        else None,
+        contribution_amount=facts.contribution_amount,
+        frequency=facts.frequency,
+        monthly_equivalent=monthly_equivalent(
+            facts.contribution_amount, facts.frequency
+        ),
+        min_reliability_score=gate,
+        created_at=tontine.created_at,
+        affinity_score=affinity,
+        is_eligible=eligible,
+        ineligibility_reason=None
+        if eligible
+        else "Cette tontine demande un score de fiabilité plus élevé",
+        reasons=reasons,
     )
 
 

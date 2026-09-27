@@ -310,6 +310,12 @@ def test_discovery_excludes_joined_and_ranks_by_affinity(test_database_url):
                 assert top["monthly_equivalent"] == "140.00"
                 assert top["seats_left"] == 9
                 assert any(reason["matched"] for reason in top["reasons"])
+                detail = await client.get(f"/api/v1/discovery/tontines/{top['id']}")
+                assert detail.status_code == 200
+                assert detail.json() == top
+                assert (
+                    await client.get(f"/api/v1/discovery/tontines/{hidden_id}")
+                ).status_code == 404
 
                 gated_item = next(
                     item
@@ -332,6 +338,18 @@ def test_discovery_excludes_joined_and_ranks_by_affinity(test_database_url):
                 assert [item["name"] for item in searched["items"]] == [
                     "Tontine coûteuse"
                 ]
+                weekly = (
+                    await client.get("/api/v1/discovery/tontines?frequency=weekly")
+                ).json()
+                assert weekly["items"] == []
+                assert weekly["total"] == 0
+                monthly = (
+                    await client.get("/api/v1/discovery/tontines?frequency=monthly")
+                ).json()
+                assert monthly["total"] == 3
+                assert (
+                    await client.get("/api/v1/discovery/tontines?frequency=invalid")
+                ).status_code == 422
 
                 # Adhésion directe : autorisée sur une tontine ouverte,
                 # refusée quand le score exigé n'est pas atteint.
@@ -346,6 +364,9 @@ def test_discovery_excludes_joined_and_ranks_by_affinity(test_database_url):
                 )
                 assert joined_response.status_code == 201
                 assert joined_response.json()["role"] == "member"
+                assert (
+                    await client.get(f"/api/v1/discovery/tontines/{top['id']}")
+                ).status_code == 404
 
                 assert (
                     await client.post(f"/api/v1/discovery/tontines/{top['id']}/join")

@@ -1,11 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
-import { ArrowLeft, CalendarClock, Copy, UserMinus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarClock, Coins, Copy, Layers3, UserMinus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useCurrentUser } from '@/app/current-user-context'
-import { EmptyState } from '@/components/shared/empty-state'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { useConfirm } from '@/components/shared/confirm-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -18,7 +17,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { formatCurrencyAmount } from '@/lib/format'
 import { messageOf } from '@/lib/http'
+import {
+  listCycles,
+  type Cycle,
+} from '@/features/tontines/cycles-api'
+import {
+  activeCycleOf,
+  cycleFrequencyLabels,
+  currentTurnOf,
+  formatDate,
+  initialsOf,
+} from '@/features/tontines/tontine-presentation'
 import {
   archiveTontine,
   changeMemberRole,
@@ -37,6 +48,8 @@ import {
   type MembershipRole,
   type Tontine,
 } from '@/features/tontines/tontines-api'
+import TontineCyclesPanel from '@/features/tontines/TontineCyclesPanel'
+import TontinePayoutsPanel from '@/features/tontines/TontinePayoutsPanel'
 
 const roleLabels: Record<MembershipRole, string> = {
   owner: 'Propriétaire',
@@ -53,9 +66,15 @@ export default function TontineWorkspace() {
   const confirm = useConfirm()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') ?? 'overview'
+  const [renderTime] = useState(() => Date.now())
 
   const [tontine, setTontine] = useState<Tontine | null>(null)
   const [members, setMembers] = useState<MembershipPage | null>(null)
+  const [cycleState, setCycleState] = useState<{
+    tontineId: string
+    cycles: Cycle[]
+    error: string
+  }>({ tontineId: '', cycles: [], error: '' })
   const [invitations, setInvitations] = useState<InvitationPage | null>(null)
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null)
   const [loading, setLoading] = useState(true)
@@ -105,6 +124,31 @@ export default function TontineWorkspace() {
       controller.abort()
     }
   }, [tontineId, reload, getAccessTokenSilently, profile.id])
+
+  useEffect(() => {
+    if (!tontineId) return
+    const controller = new AbortController()
+    let active = true
+    void (async () => {
+      try {
+        const token = await getAccessTokenSilently()
+        const page = await listCycles(token, tontineId, 0, controller.signal)
+        if (active) setCycleState({ tontineId, cycles: page.items, error: '' })
+      } catch (caught) {
+        if (active && !controller.signal.aborted) {
+          setCycleState({
+            tontineId,
+            cycles: [],
+            error: messageOf(caught, 'Impossible de charger les cycles.'),
+          })
+        }
+      }
+    })()
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [getAccessTokenSilently, reload, tontineId])
 
   async function action(work: (token: string) => Promise<unknown>, success: string) {
     setBusy(true)
@@ -257,7 +301,17 @@ export default function TontineWorkspace() {
   const canInvite = myMembership?.role === 'owner' || myMembership?.role === 'manager'
   const isOwner = myMembership?.role === 'owner'
   const writable = tontine.status !== 'archived'
-  const activeMembersCount = members.items.filter((item) => item.status === 'active').length
+  const activeMembers = members.items.filter((item) => item.status === 'active')
+  const activeMembersCount = activeMembers.length
+  const cycles = cycleState.tontineId === tontineId ? cycleState.cycles : []
+  const cyclesError = cycleState.tontineId === tontineId ? cycleState.error : ''
+  const overviewCycle = activeCycleOf(cycles)
+  const overviewTurn = overviewCycle ? currentTurnOf(overviewCycle, new Date(renderTime)) : undefined
+  const cyclePot =
+    overviewCycle && activeMembersCount > 0
+      ? Number(overviewCycle.contribution_amount) *
+        Math.max(0, activeMembersCount - (overviewCycle.beneficiary_contributes ? 0 : 1))
+      : 0
 
   return (
     <div className="space-y-6">
@@ -281,10 +335,172 @@ export default function TontineWorkspace() {
           <TabsTrigger value="members">Membres</TabsTrigger>
           {canInvite ? <TabsTrigger value="invitations">Invitations</TabsTrigger> : null}
           <TabsTrigger value="cycles">Cycles</TabsTrigger>
+          <TabsTrigger value="payouts">Versements</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.6fr)]">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Card>
+                <CardContent className="flex items-center gap-3 p-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Users className="h-5 w-5" /></span>
+                  <div><p className="text-xs text-muted-foreground">Membres actifs</p><p className="text-lg font-bold">{activeMembersCount}</p></div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="flex items-center gap-3 p-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><CalendarClock className="h-5 w-5" /></span>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fréquence</p>
+                    <p className="text-sm font-bold">{overviewCycle ? cycleFrequencyLabels[overviewCycle.frequency] : 'À configurer'}</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="flex items-center gap-3 p-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Coins className="h-5 w-5" /></span>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cagnotte attendue / tour</p>
+                    <p className="text-sm font-bold">
+                      {overviewCycle ? formatCurrencyAmount(cyclePot, tontine.currency) : '—'}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {cyclesError ? (
+              <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                {cyclesError}
+              </p>
+            ) : null}
+
+            {overviewCycle && overviewTurn && ['active', 'scheduled'].includes(overviewCycle.status) ? (
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background text-primary"><Layers3 className="h-5 w-5" /></span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold tracking-wide text-primary uppercase">Prochain tour</p>
+                    <h3 className="mt-0.5 truncate font-semibold">
+                      Tour {overviewTurn.position} — {
+                        members.items.find((member) => member.id === overviewTurn.beneficiary_membership_id)?.display_name ??
+                        `Membre ${overviewTurn.beneficiary_membership_id.slice(0, 8)}…`
+                      }
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatDate(overviewTurn.scheduled_for, overviewCycle.timezone)} · {overviewCycle.name}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/tontines/${tontine.id}/cycles/${overviewCycle.id}/turns/${overviewTurn.id}`)}
+                >
+                  Voir le tour <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle className="text-base">Tours</CardTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {overviewCycle ? `${overviewCycle.name} · ${cycleFrequencyLabels[overviewCycle.frequency]}` : 'Aucun cycle créé'}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setSearchParams({ tab: 'cycles' })}>
+                    Voir les cycles
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {overviewCycle?.turns.length ? (
+                    <ol className="divide-y divide-border">
+                      {[...overviewCycle.turns].sort((left, right) => left.position - right.position).slice(0, 6).map((turn) => {
+                        const member = members.items.find((item) => item.id === turn.beneficiary_membership_id)
+                        const passed = new Date(turn.scheduled_for).getTime() < renderTime
+                        const isNext =
+                          ['active', 'scheduled'].includes(overviewCycle.status) &&
+                          turn.id === overviewTurn?.id
+                        const state = overviewCycle.status === 'completed'
+                          ? 'Terminé'
+                          : overviewCycle.status === 'cancelled'
+                            ? 'Annulé'
+                            : overviewCycle.status === 'draft'
+                              ? 'Brouillon'
+                          : isNext
+                            ? 'Prochain tour'
+                            : passed
+                              ? 'Date planifiée passée'
+                              : 'À venir'
+                        return (
+                          <li key={turn.id}>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/40"
+                              onClick={() => navigate(`/tontines/${tontine.id}/cycles/${overviewCycle.id}/turns/${turn.id}`)}
+                            >
+                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${isNext ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                {turn.position}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">{member?.display_name ?? `Membre ${turn.beneficiary_membership_id.slice(0, 8)}…`}</span>
+                                <span className="block text-xs text-muted-foreground">{formatDate(turn.scheduled_for, overviewCycle.timezone)}</span>
+                              </span>
+                              <span className={`shrink-0 text-xs font-medium ${isNext ? 'text-primary' : 'text-muted-foreground'}`}>{state}</span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  ) : (
+                    <div className="py-5 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        {overviewCycle ? 'Les tours seront disponibles une fois les membres réunis.' : 'Créez un brouillon de cycle pour définir les cotisations et les tours.'}
+                      </p>
+                      <Button className="mt-3" size="sm" variant="outline" onClick={() => setSearchParams({ tab: 'cycles' })}>
+                        {overviewCycle ? 'Configurer les tours' : 'Créer un cycle'}
+                      </Button>
+                    </div>
+                  )}
+                  {overviewCycle && overviewCycle.turns.length > 6 ? (
+                    <p className="mt-2 text-center text-xs text-muted-foreground">6 premiers tours affichés · consultez Cycles pour le calendrier complet.</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <CardTitle className="text-base">Membres ({activeMembersCount})</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => setSearchParams({ tab: 'members' })}>
+                    Voir tous
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {activeMembers.length ? (
+                    <ul className="divide-y divide-border">
+                      {activeMembers.slice(0, 6).map((member) => {
+                        const label = member.display_name ?? `Membre ${member.user_id.slice(0, 8)}…`
+                        return (
+                          <li key={member.id} className="flex items-center gap-3 py-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">{initialsOf(label)}</span>
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium">{label}{member.user_id === profile.id ? ' · Vous' : ''}</span>
+                            <Badge variant="secondary">{roleLabels[member.role]}</Badge>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="py-5 text-center text-sm text-muted-foreground">Aucun membre actif.</p>
+                  )}
+                  {activeMembers.length > 6 ? (
+                    <p className="mt-2 text-center text-xs text-muted-foreground">+{activeMembers.length - 6} autres membres</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.6fr)]">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Paramètres</CardTitle>
@@ -414,7 +630,7 @@ export default function TontineWorkspace() {
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {member.user_id === profile.id ? 'Vous' : `Membre ${member.user_id.slice(0, 8)}`}
+                      {member.user_id === profile.id ? 'Vous' : member.display_name?.trim() || `Membre ${member.user_id.slice(0, 8)}`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {roleLabels[member.role]} · {member.status}
@@ -533,10 +749,20 @@ export default function TontineWorkspace() {
         ) : null}
 
         <TabsContent value="cycles">
-          <EmptyState
-            icon={CalendarClock}
-            title="Bientôt disponible"
-            description="La création de cycles, la génération du calendrier et le suivi des cotisations arrivent dans une prochaine mise à jour."
+          <TontineCyclesPanel
+            tontineId={tontine.id}
+            currency={tontine.currency}
+            canManage={canInvite}
+            isArchived={!writable}
+          />
+        </TabsContent>
+
+        <TabsContent value="payouts">
+          <TontinePayoutsPanel
+            tontineId={tontine.id}
+            currency={tontine.currency}
+            canManage={canInvite}
+            isArchived={!writable}
           />
         </TabsContent>
       </Tabs>

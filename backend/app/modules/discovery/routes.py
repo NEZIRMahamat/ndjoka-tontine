@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.modules.cycles.enums import CycleFrequency
 from app.modules.discovery import services
-from app.modules.discovery.schemas import DiscoveryList
+from app.modules.discovery.schemas import DiscoveredTontine, DiscoveryList
 from app.modules.memberships.schemas import MembershipRead
 from app.modules.memberships.services import MembershipError
 from app.modules.users.dependencies import get_current_active_user
@@ -43,6 +44,7 @@ async def discover(
     session: Session,
     actor: Actor,
     search: Annotated[str | None, Query(max_length=120)] = None,
+    frequency: CycleFrequency | None = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
     eligible_only: Annotated[bool, Query()] = False,
@@ -51,6 +53,7 @@ async def discover(
         session,
         actor,
         search=search,
+        frequency=frequency,
         limit=limit,
         offset=offset,
         eligible_only=eligible_only,
@@ -70,3 +73,15 @@ async def discover(
 async def join(session: Session, actor: Actor, tontine_id: UUID) -> MembershipRead:
     membership = await services.join_discoverable_tontine(session, actor, tontine_id)
     return MembershipRead.model_validate(membership)
+
+
+@router.get(
+    "/tontines/{tontine_id}",
+    response_model=DiscoveredTontine,
+    summary="Consulter une tontine ouverte",
+    responses={404: {"description": "Tontine introuvable ou non ouverte"}},
+)
+async def read_tontine(
+    session: Session, actor: Actor, tontine_id: UUID
+) -> DiscoveredTontine:
+    return await services.get_discoverable_tontine(session, actor, tontine_id)

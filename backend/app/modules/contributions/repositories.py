@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import String, case, cast, func, select, update
+from sqlalchemy import Date, String, case, cast, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.contributions.enums import (
@@ -12,6 +13,7 @@ from app.modules.contributions.models import Contribution
 from app.modules.cycles.models import Cycle, CycleTurn
 from app.modules.memberships.enums import MembershipStatus
 from app.modules.memberships.models import Membership
+from app.modules.tontines.models import Tontine
 
 
 def status_condition(status: EffectiveContributionStatus, now: datetime):
@@ -60,6 +62,25 @@ async def find_contribution(
             populate_existing=True
         )
     return await session.scalar(statement)
+
+
+async def contribution_context(
+    session: AsyncSession, cycle_id: UUID
+) -> tuple[str, int, UUID, str, str]:
+    row = (
+        await session.execute(
+            select(
+                Cycle.name,
+                Cycle.sequence_number,
+                Tontine.id,
+                Tontine.name,
+                Tontine.currency,
+            )
+            .join(Tontine, Tontine.id == Cycle.tontine_id)
+            .where(Cycle.id == cycle_id)
+        )
+    ).one()
+    return row._tuple()
 
 
 async def list_cycle_contributions(
@@ -119,6 +140,82 @@ async def list_user_contributions(
         .where(*conditions)
     )
     return list(rows), int(total or 0)
+
+
+async def list_user_contributions_with_context(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    limit: int,
+    offset: int,
+    status: EffectiveContributionStatus | None,
+    now: datetime,
+    order: Literal["asc", "desc"] = "asc",
+) -> tuple[list[tuple[Contribution, str, int, UUID, str, str]], int]:
+    conditions = [
+        Membership.user_id == user_id,
+        Membership.status == MembershipStatus.ACTIVE,
+    ]
+    if status is not None:
+        conditions.extend(status_condition(status, now))
+    statement = (
+        select(
+            Contribution,
+            Cycle.name,
+            Cycle.sequence_number,
+            Tontine.id,
+            Tontine.name,
+            Tontine.currency,
+        )
+        .join(Membership, Membership.id == Contribution.membership_id)
+        .join(Cycle, Cycle.id == Contribution.cycle_id)
+        .join(Tontine, Tontine.id == Cycle.tontine_id)
+        .where(*conditions)
+        .order_by(
+            Contribution.due_at.desc() if order == "desc" else Contribution.due_at,
+            Contribution.id.desc() if order == "desc" else Contribution.id,
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = await session.execute(statement)
+    total = await session.scalar(
+        select(func.count())
+        .select_from(Contribution)
+        .join(Membership, Membership.id == Contribution.membership_id)
+        .join(Cycle, Cycle.id == Contribution.cycle_id)
+        .where(*conditions)
+    )
+    return [tuple(row) for row in rows.all()], int(total or 0)
+
+
+async def monthly_confirmed_contributions(
+    session: AsyncSession, user_id: UUID, since: datetime
+):
+    month = cast(
+        func.date_trunc("month", func.timezone("UTC", Contribution.confirmed_at)),
+        Date,
+    )
+    rows = await session.execute(
+        select(
+            month,
+            Tontine.currency,
+            func.sum(Contribution.amount_due),
+            func.count(),
+        )
+        .join(Membership, Membership.id == Contribution.membership_id)
+        .join(Cycle, Cycle.id == Contribution.cycle_id)
+        .join(Tontine, Tontine.id == Cycle.tontine_id)
+        .where(
+            Membership.user_id == user_id,
+            Membership.status == MembershipStatus.ACTIVE,
+            Contribution.status == ContributionStatus.CONFIRMED,
+            Contribution.confirmed_at >= since,
+        )
+        .group_by(month, Tontine.currency)
+        .order_by(month, Tontine.currency)
+    )
+    return rows.all()
 
 
 async def existing_pairs(

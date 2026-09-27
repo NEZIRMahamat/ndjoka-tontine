@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -54,6 +55,7 @@ async def list_items(
     status: PayoutStatus | None = None,
     limit: int = 20,
     offset: int = 0,
+    order: Literal["asc", "desc"] = "asc",
 ):
     query = select(Payout)
     if cycle_id is not None:
@@ -69,7 +71,14 @@ async def list_items(
     total = await session.scalar(select(func.count()).select_from(query.subquery()))
     items = list(
         await session.scalars(
-            query.order_by(Payout.scheduled_for, Payout.id).limit(limit).offset(offset)
+            query.order_by(
+                Payout.scheduled_for.desc()
+                if order == "desc"
+                else Payout.scheduled_for,
+                Payout.id.desc() if order == "desc" else Payout.id,
+            )
+            .limit(limit)
+            .offset(offset)
         )
     )
     return items, int(total or 0)

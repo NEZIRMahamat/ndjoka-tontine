@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -109,9 +109,15 @@ async def list_mine(
     limit: Limit = 20,
     offset: Offset = 0,
     status: PayoutStatus | None = None,
+    order: Literal["asc", "desc"] = "asc",
 ):
     items, total = await repositories.list_items(
-        session, user_id=actor.id, status=status, limit=limit, offset=offset
+        session,
+        user_id=actor.id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        order=order,
     )
     results = []
     for item in items:

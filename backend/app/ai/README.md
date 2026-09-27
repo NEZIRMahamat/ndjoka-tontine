@@ -14,8 +14,8 @@ Chaque message passe par deux modèles Groq :
 2. **Agent principal** (`agent_ndjoka.py`, `GROQ_AGENT_MODEL`) : répond en
    s'appuyant sur les outils, avec au plus 3 tours d'appels d'outils.
 
-En cas d'indisponibilité ou d'erreur, un message générique est renvoyé ; la
-route ne renvoie jamais d'erreur technique au client.
+En cas d'indisponibilité ou d'erreur fournisseur, la route renvoie `503` avec
+un message générique, sans exposer de détail technique ni de secret.
 
 ## Outils
 

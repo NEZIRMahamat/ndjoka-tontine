@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.cycles.enums import CycleStatus
+from app.modules.cycles.enums import CycleFrequency, CycleStatus
 from app.modules.cycles.models import Cycle
 from app.modules.memberships.enums import MembershipStatus
 from app.modules.memberships.models import Membership
@@ -41,7 +41,9 @@ def _reference_cycle_subquery():
     )
 
 
-def _base_query(user_id: UUID, search: str | None) -> Select:
+def _base_query(
+    user_id: UUID, search: str | None, frequency: CycleFrequency | None = None
+) -> Select:
     member_count = _member_count_subquery()
     already_member = (
         select(Membership.id)
@@ -73,15 +75,32 @@ def _base_query(user_id: UUID, search: str | None) -> Select:
                 func.lower(func.coalesce(Tontine.description, "")).like(pattern),
             )
         )
+    if frequency is not None:
+        query = query.where(Cycle.frequency == frequency)
     return query
 
 
 async def list_discoverable_tontines(
-    session: AsyncSession, user_id: UUID, *, search: str | None = None
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    search: str | None = None,
+    frequency: CycleFrequency | None = None,
 ) -> list[tuple[Tontine, int, Cycle | None]]:
     """Lister les tontines ouvertes que l'utilisateur n'a pas encore rejointes."""
-    query = _base_query(user_id, search).order_by(
+    query = _base_query(user_id, search, frequency).order_by(
         Tontine.created_at.desc(), Tontine.id.desc()
     )
     rows = (await session.execute(query)).all()
     return [(row[0], int(row[1] or 0), row[2]) for row in rows]
+
+
+async def get_discoverable_tontine(
+    session: AsyncSession, user_id: UUID, tontine_id: UUID
+) -> tuple[Tontine, int, Cycle | None] | None:
+    row = (
+        await session.execute(
+            _base_query(user_id, None).where(Tontine.id == tontine_id)
+        )
+    ).first()
+    return (row[0], int(row[1] or 0), row[2]) if row else None

@@ -75,6 +75,7 @@ class MembershipRead(BaseModel):
     id: UUID
     tontine_id: UUID
     user_id: UUID
+    display_name: str | None = None
     role: MembershipRole
     status: MembershipStatus
     joined_at: datetime

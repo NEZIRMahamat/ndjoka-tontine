@@ -34,6 +34,7 @@ pending | declared | rejected -> cancelled   (annulation du cycle)
 | Méthode | Route |
 | --- | --- |
 | `GET` | `/api/v1/me/contributions` |
+| `GET` | `/api/v1/me/contributions/monthly` |
 | `GET` | `/api/v1/contributions/{contribution_id}` |
 | `POST` | `/api/v1/contributions/{contribution_id}/declare` |
 | `POST` | `/api/v1/contributions/{contribution_id}/confirm` |
@@ -41,3 +42,9 @@ pending | declared | rejected -> cancelled   (annulation du cycle)
 | `GET` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions` |
 | `GET` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions/summary` |
 | `POST` | `/api/v1/tontines/{tontine_id}/cycles/{cycle_id}/contributions/generate` |
+
+La liste `/me/contributions` et le détail incluent le nom du cycle et de la
+tontine ainsi que la devise. La liste accepte `order=desc` pour afficher les
+échéances récentes en premier (`asc` par défaut).
+`/me/contributions/monthly` agrège les cotisations confirmées des six derniers
+mois par devise, sans additionner des monnaies différentes.

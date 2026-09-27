@@ -155,7 +155,12 @@ async def list_members(
         session, tontine_id, limit=limit, offset=offset
     )
     return MembershipList(
-        items=[MembershipRead.model_validate(item) for item in items],
+        items=[
+            MembershipRead.model_validate(
+                {**item.__dict__, "display_name": item.user.display_name}
+            )
+            for item in items
+        ],
         total=total,
         limit=limit,
         offset=offset,

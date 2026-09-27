@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -46,6 +46,11 @@ class ContributionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     cycle_id: UUID
+    cycle_name: str | None = None
+    cycle_sequence: int | None = None
+    tontine_id: UUID | None = None
+    tontine_name: str | None = None
+    currency: str | None = None
     turn_id: UUID
     membership_id: UUID
     amount_due: Decimal
@@ -69,6 +74,13 @@ class ContributionList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class MonthlyConfirmedContribution(BaseModel):
+    month: date
+    currency: str
+    confirmed_amount: Decimal
+    count: int
 
 
 class ContributionSummary(BaseModel):

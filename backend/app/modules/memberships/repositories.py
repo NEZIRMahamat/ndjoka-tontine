@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.modules.memberships.enums import InvitationStatus, MembershipStatus
 from app.modules.memberships.models import Invitation, Membership
@@ -55,6 +56,7 @@ async def list_memberships(
     condition = Membership.tontine_id == tontine_id
     rows = await session.scalars(
         select(Membership)
+        .options(selectinload(Membership.user))
         .where(condition)
         .order_by(Membership.joined_at, Membership.id)
         .limit(limit)

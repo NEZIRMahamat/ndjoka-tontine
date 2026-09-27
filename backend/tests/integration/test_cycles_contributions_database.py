@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import httpx2 as httpx
@@ -75,6 +76,11 @@ def test_cycle_and_contribution_http_lifecycle(test_database_url):
                     json={"token": invitation.json()["token"]},
                 )
                 assert accepted.status_code == 200
+                listed_members = await client.get(base + "/members", headers=owner)
+                assert listed_members.status_code == 200
+                assert all(
+                    "display_name" in item for item in listed_members.json()["items"]
+                )
 
                 denied = await client.post(
                     base + "/cycles",
@@ -154,7 +160,26 @@ def test_cycle_and_contribution_http_lifecycle(test_database_url):
 
                 mine = await client.get("/api/v1/me/contributions", headers=member)
                 assert mine.status_code == 200 and mine.json()["total"] == 2
+                assert mine.json()["items"][0]["tontine_id"] == tontine_id
+                assert mine.json()["items"][0]["tontine_name"] == "Cycle intégré"
+                assert mine.json()["items"][0]["currency"] == "EUR"
+                assert mine.json()["items"][0]["cycle_name"] == "Cycle 2027"
+                assert mine.json()["items"][0]["cycle_sequence"] == 1
+                latest = await client.get(
+                    "/api/v1/me/contributions?order=desc", headers=member
+                )
+                assert latest.status_code == 200
+                assert [item["id"] for item in latest.json()["items"]] == [
+                    item["id"] for item in reversed(mine.json()["items"])
+                ]
                 contribution_id = mine.json()["items"][0]["id"]
+                detail = await client.get(
+                    f"/api/v1/contributions/{contribution_id}", headers=member
+                )
+                assert detail.status_code == 200
+                assert detail.json()["tontine_name"] == "Cycle intégré"
+                assert detail.json()["cycle_name"] == "Cycle 2027"
+                assert detail.json()["currency"] == "EUR"
                 declared = await client.post(
                     f"/api/v1/contributions/{contribution_id}/declare",
                     headers=member,
@@ -180,6 +205,18 @@ def test_cycle_and_contribution_http_lifecycle(test_database_url):
                     confirmed.status_code == 200
                     and confirmed.json()["amount_due"] == "125.50"
                 )
+                monthly = await client.get(
+                    "/api/v1/me/contributions/monthly", headers=member
+                )
+                assert monthly.status_code == 200
+                assert monthly.json() == [
+                    {
+                        "month": datetime.now(UTC).strftime("%Y-%m-01"),
+                        "currency": "EUR",
+                        "confirmed_amount": "125.50",
+                        "count": 1,
+                    }
+                ]
                 assert (
                     await client.post(
                         f"/api/v1/contributions/{contribution_id}/confirm",

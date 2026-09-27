@@ -13,6 +13,8 @@ Rôles internes d'une tontine, invitations et cycle de vie des adhésions.
 
 Tout membre actif peut consulter la tontine et ses membres. Seuls `owner` et
 `manager` voient les invitations.
+La liste des membres expose leur nom affiché, sans partager leur adresse
+e-mail au groupe.
 
 ## Adhésions
 

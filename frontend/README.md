@@ -57,16 +57,18 @@ src/
 
 | Feature | Écran |
 | --- | --- |
-| `dashboard` | Accueil |
-| `explorer` | Tontines ouvertes recommandées et adhésion |
-| `tontines` | Mes tontines, création, espace de gestion d'une tontine |
-| `payments` | Vue des paiements (pas encore reliée à l'API) |
-| `ai` | Assistant Ndjoka AI |
+| `dashboard` | Accueil et activité mensuelle des cotisations confirmées |
+| `explorer` | Tontines ouvertes recommandées, fiches détaillées, adhésion et conseils |
+| `tontines` | Mes tontines, création guidée, membres, cycles, tours, cotisations et versements |
+| `payments` | Échéances, historique paginé et détails des cotisations et versements déclarés, suivi des réceptions |
+| `ai` | Conversation Ndjoka AI et recommandations fondées sur le profil réel |
 | `profile` | Compte, profil d'épargnant et score de fiabilité |
 | `admin` | Administration des utilisateurs (rôles `support` et `platform_admin`) |
 
 Chaque client API valide les réponses avec des type guards avant de les
 utiliser. Les requêtes passent par `apiRequest` (`src/lib/http.ts`).
+Les transferts d'argent sont réalisés en dehors de l'application ; les
+déclarations et confirmations sont enregistrées par l'API.
 
 ## Vérifications
 
@@ -82,7 +84,9 @@ commande que celle de Vercel.
 
 Vercel, avec `frontend` comme répertoire racine, `npm run build` comme
 commande de build et `dist` comme sortie. Les quatre variables `VITE_*` sont à
-définir dans l'environnement Production.
+définir dans l'environnement Production. `vercel.json` réécrit les URL des
+pages internes vers `index.html` pour permettre l'accès direct aux liens
+partagés et aux notifications.
 
 L'authentification ne fonctionne que sur les domaines déclarés dans Auth0.
 Utiliser le domaine de production (`https://app.ndjoka-tontine.com`) plutôt

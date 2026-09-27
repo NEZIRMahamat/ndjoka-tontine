@@ -236,6 +236,11 @@ def test_generation_amounts_and_real_http_lifecycle(
                 await client.get("/api/v1/me/payouts", headers={"X-Actor": "member"})
             ).json()
             assert personal["total"] == 1 and personal["items"][0]["id"] == item["id"]
+            latest = await client.get(
+                "/api/v1/me/payouts?order=desc", headers={"X-Actor": "member"}
+            )
+            assert latest.status_code == 200
+            assert latest.json()["items"][0]["id"] == item["id"]
             filtered = (
                 await client.get(path + "/payouts?status=received&limit=1")
             ).json()

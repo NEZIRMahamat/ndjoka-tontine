@@ -29,6 +29,7 @@ export type Membership = {
   id: string
   tontine_id: string
   user_id: string
+  display_name?: string | null
   role: MembershipRole
   status: MembershipStatus
   joined_at: string
