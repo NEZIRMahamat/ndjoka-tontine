@@ -1,0 +1,94 @@
+{
+  "name": "ndjoka-reliability-logreg",
+  "version": "0.1.0",
+  "trained_on": "simulated",
+  "target": "probabilité qu'une cotisation soit payée en retard ou impayée",
+  "metrics": {
+    "auc": 0.772,
+    "auc_new_members": 0.827
+  },
+  "intercept": -0.9353160519263,
+  "effort_cap": 3.0,
+  "effort_threshold": 0.5,
+  "features": {
+    "numeric": {
+      "effort_ratio_c": {
+        "mean": 0.5272131876589585,
+        "scale": 0.4057152200465769,
+        "weight": 0.20143394410903953
+      },
+      "effort_excess": {
+        "mean": 0.15359750604703742,
+        "scale": 0.32799490651878704,
+        "weight": 0.5332807729102322
+      },
+      "horizon_months": {
+        "mean": 18.957338939037964,
+        "scale": 9.445917774036676,
+        "weight": -0.03572995978988409
+      },
+      "hist_n": {
+        "mean": 9.245702980091504,
+        "scale": 7.6948092929088725,
+        "weight": -0.17687581830500013
+      },
+      "hist_late": {
+        "mean": 1.741436873995301,
+        "scale": 2.4824973389279474,
+        "weight": 0.21011550924307246
+      },
+      "hist_unpaid": {
+        "mean": 0.5142821812785953,
+        "scale": 0.9920597704699066,
+        "weight": 0.08862893758335719
+      },
+      "has_history": {
+        "mean": 0.9332261654507233,
+        "scale": 0.2496453406529833,
+        "weight": 0.18582043076537022
+      },
+      "on_time_rate": {
+        "mean": 0.7162354449674627,
+        "scale": 0.3133403795550173,
+        "weight": -0.30781029634158413
+      },
+      "already_received": {
+        "mean": 0.5027822431062199,
+        "scale": 0.500023175264306,
+        "weight": 0.3813442803352894
+      },
+      "risky_month": {
+        "mean": 0.1695313466056634,
+        "scale": 0.3752437617833418,
+        "weight": 0.1604917657480316
+      }
+    },
+    "categorical": {
+      "experience_level": {
+        "beginner": 0.0,
+        "intermediate": -0.4003295928119638,
+        "experienced": -0.5860944158326533
+      },
+      "savings_goal": {
+        "project": 0.0,
+        "emergency": 0.14808147927913073,
+        "housing": -0.16853329532963093,
+        "education": -0.1219683342516802,
+        "business": 0.09727492550673826
+      },
+      "frequency": {
+        "weekly": 0.0,
+        "monthly": -0.09781772301552798
+      },
+      "preferred_rhythm": {
+        "weekly": 0.0,
+        "monthly": 0.018499328413705194
+      },
+      "turn_preference": {
+        "early": 0.0,
+        "flexible": 0.12456533561718251,
+        "late": -0.070472185831146
+      }
+    }
+  }
+}
