@@ -142,9 +142,7 @@ def build_features(
             monthly = float(contribution_amount) * WEEKS_PER_MONTH
         else:
             monthly = float(contribution_amount)
-        effort = (
-            min(monthly / capacity, model["effort_cap"]) if capacity > 0 else None
-        )
+        effort = min(monthly / capacity, model["effort_cap"]) if capacity > 0 else None
         features.update(
             effort_ratio_c=effort,
             effort_excess=(
@@ -165,9 +163,7 @@ def _quantize(value: float) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
 
 
-def _factors(
-    contributions: dict[str, float], *, positive: bool
-) -> list[RiskFactor]:
+def _factors(contributions: dict[str, float], *, positive: bool) -> list[RiskFactor]:
     grouped = [
         (key, label, sum(contributions.get(name, 0.0) for name in names))
         for key, (label, names) in FACTOR_GROUPS.items()
@@ -190,9 +186,7 @@ def _explain(
     if increasing:
         text += f" Principal facteur de risque : {increasing[0].label.lower()}."
     if not profile_completed:
-        text += (
-            " Complétez votre profil d'épargnant pour une estimation plus précise."
-        )
+        text += " Complétez votre profil d'épargnant pour une estimation plus précise."
     return text
 
 
