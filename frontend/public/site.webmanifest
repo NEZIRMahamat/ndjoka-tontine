@@ -1,0 +1,13 @@
+{
+  "name": "Ndjoka Tontine",
+  "short_name": "Ndjoka",
+  "description": "Plateforme de tontine digitale",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "icons": [
+    { "src": "/ndjoka-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/ndjoka-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
