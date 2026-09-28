@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { useCurrentUser } from '@/app/current-user-context'
 import { useConfirm } from '@/components/shared/confirm-dialog'
-import { BackLink, InitialsAvatar, Panel, PanelHeader, SkeletonBlock } from '@/components/shared/page-primitives'
+import { BackLink, InitialsAvatar, Panel, PanelHeader, ScoreChip, SkeletonBlock } from '@/components/shared/page-primitives'
 import { localQuote } from '@/features/fees/fees-api'
 import { confirmContribution, declareContribution, rejectContribution, type Contribution } from '@/features/tontines/cycles-api'
 import { isFinancialRole, loadTontineOverview, membershipOfUser, type TontineOverview } from '@/features/tontines/tontine-data'
@@ -242,7 +242,8 @@ export default function TurnDetailPage() {
                     <InitialsAvatar name={memberLabel(member)} className="h-9 w-9" tone={config.avatar} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-700">{memberLabel(member)}</span>
+                        <button type="button" onClick={() => navigate(isSelf ? '/profile' : `/members/${member.user_id}`)} className="truncate text-sm font-semibold text-slate-700 hover:text-emerald-700 hover:underline">{memberLabel(member)}</button>
+                        <ScoreChip score={member.reliability_score} provisional={member.reliability_provisional} />
                         {isSelf && <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-semibold text-blue-600">Vous</span>}
                         {member.id === turn.beneficiary_membership_id && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">Bénéficiaire</span>}
                       </div>

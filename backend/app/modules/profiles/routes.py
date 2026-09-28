@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,7 @@ from app.db.session import get_db_session
 from app.modules.profiles import services
 from app.modules.profiles.reliability import get_reliability
 from app.modules.profiles.schemas import (
+    PublicProfileRead,
     ReliabilityRead,
     SaverProfileInput,
     SaverProfileRead,
@@ -70,3 +72,25 @@ async def delete_profile(session: Session, actor: Actor) -> Response:
 )
 async def read_reliability(session: Session, actor: Actor) -> ReliabilityRead:
     return await get_reliability(session, actor.id)
+
+
+public_router = APIRouter(
+    prefix="/users",
+    tags=["profil épargnant"],
+    responses={401: {"description": "Token absent ou invalide"}},
+)
+
+
+@public_router.get(
+    "/{user_id}/profile",
+    response_model=PublicProfileRead,
+    summary="Consulter la fiche publique d'un membre",
+    responses={404: {"description": "Membre introuvable"}},
+)
+async def read_public_profile(
+    user_id: UUID, session: Session, actor: Actor
+) -> PublicProfileRead:
+    profile = await services.get_public_profile(session, actor, user_id)
+    if profile is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Membre introuvable")
+    return profile

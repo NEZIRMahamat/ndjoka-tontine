@@ -6,6 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { useCurrentUser } from '@/app/current-user-context'
 import { StatusBadge } from '@/components/shared/status-badge'
+import { ScoreChip } from '@/components/shared/page-primitives'
 import { useConfirm } from '@/components/shared/confirm-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -629,8 +630,11 @@ export default function TontineWorkspace() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {member.user_id === profile.id ? 'Vous' : member.display_name?.trim() || `Membre ${member.user_id.slice(0, 8)}`}
+                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-foreground">
+                      <button type="button" className="truncate hover:text-primary hover:underline" onClick={() => navigate(member.user_id === profile.id ? '/profile' : `/members/${member.user_id}`)}>
+                        {member.user_id === profile.id ? 'Vous' : member.display_name?.trim() || `Membre ${member.user_id.slice(0, 8)}`}
+                      </button>
+                      <ScoreChip score={member.reliability_score} provisional={member.reliability_provisional} />
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {roleLabels[member.role]} · {member.status}

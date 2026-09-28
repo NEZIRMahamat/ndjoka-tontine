@@ -12,7 +12,12 @@ from app.modules.discovery.matching import (
     monthly_equivalent,
     score_affinity,
 )
-from app.modules.discovery.schemas import DiscoveredTontine, DiscoveryList
+from app.modules.discovery.schemas import (
+    DiscoveredMember,
+    DiscoveredMemberList,
+    DiscoveredTontine,
+    DiscoveryList,
+)
 from app.modules.memberships import repositories as membership_repositories
 from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
@@ -184,3 +189,51 @@ async def join_discoverable_tontine(
     except Exception:
         await session.rollback()
         raise
+
+
+async def list_discoverable_members(
+    session: AsyncSession, actor: User, tontine_id: UUID
+) -> DiscoveredMemberList:
+    """Lister les membres actifs d'une tontine ouverte, avec leur score.
+
+    Réservé aux tontines découvrables ; seules des informations publiques sont
+    renvoyées (aucune donnée de contact ni financière).
+    """
+    from sqlalchemy import select
+
+    from app.modules.cycles.models import CycleTurn
+
+    row = await repositories.get_discoverable_tontine(session, actor.id, tontine_id)
+    if row is None:
+        raise MembershipError("Tontine introuvable ou non ouverte", 404)
+    tontine, _, cycle, _ = row
+    memberships = await membership_repositories.list_memberships(
+        session, tontine.id, limit=100, offset=0
+    )
+    positions: dict[UUID, int] = {}
+    if cycle is not None:
+        turns = await session.scalars(
+            select(CycleTurn).where(CycleTurn.cycle_id == cycle.id)
+        )
+        positions = {turn.beneficiary_membership_id: turn.position for turn in turns}
+    items: list[DiscoveredMember] = []
+    for membership in memberships[0]:
+        if membership.status != MembershipStatus.ACTIVE:
+            continue
+        reliability = await get_reliability(session, membership.user_id)
+        items.append(
+            DiscoveredMember(
+                user_id=membership.user_id,
+                display_name=membership.user.display_name,
+                avatar_url=membership.user.avatar_url,
+                city=membership.user.city,
+                role=membership.role.value,
+                joined_at=membership.joined_at,
+                member_since=membership.user.created_at,
+                reliability_score=reliability.score,
+                reliability_band=reliability.band,
+                reliability_provisional=reliability.is_provisional,
+                turn_position=positions.get(membership.id),
+            )
+        )
+    return DiscoveredMemberList(items=items, total=len(items))

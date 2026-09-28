@@ -115,3 +115,32 @@ export function StatusPill({ tone, children, className }: { tone: 'emerald' | 'a
   }
   return <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', tones[tone], className)}>{children}</span>
 }
+
+
+export function scoreTone(score: number): 'emerald' | 'blue' | 'amber' | 'red' {
+  if (score >= 80) return 'emerald'
+  if (score >= 65) return 'blue'
+  if (score >= 45) return 'amber'
+  return 'red'
+}
+
+/** Pastille compacte « 82 » avec la couleur de la tranche de fiabilité. */
+export function ScoreChip({ score, provisional, className }: { score: string | number | null | undefined; provisional?: boolean | null; className?: string }) {
+  if (score === null || score === undefined) return null
+  const value = Math.round(Number(score) * 100)
+  const tones = {
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    red: 'bg-red-50 text-red-600 border-red-200',
+  }
+  return (
+    <span
+      title={`Score de fiabilité ${value}/100${provisional ? ' (provisoire)' : ''}`}
+      className={cn('inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold tabular-nums', tones[scoreTone(value)], provisional && 'border-dashed', className)}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
+      {value}
+    </span>
+  )
+}

@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,3 +51,20 @@ class ReliabilityRead(BaseModel):
     cycles_completed: int
     on_time_rate: Decimal | None
     explanation: str
+
+
+class PublicProfileRead(BaseModel):
+    """Profil consultable par les autres membres : aucune donnée de contact,
+    bancaire ou financière individuelle, uniquement la réputation et
+    l'ancienneté."""
+
+    user_id: UUID
+    display_name: str | None
+    avatar_url: str | None
+    city: str | None
+    member_since: datetime
+    reliability: ReliabilityRead
+    active_tontines: int
+    completed_cycles: int
+    experience_level: ExperienceLevel | None
+    shared_tontines: list[str]

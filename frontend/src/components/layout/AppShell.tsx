@@ -124,6 +124,7 @@ const pageTitles: Array<{ match: (path: string) => boolean; title: string }> = [
   { match: (p) => p === '/profile/notifications', title: 'Notifications' },
   { match: (p) => p === '/profile/savings', title: "Profil d'épargnant" },
   { match: (p) => p.startsWith('/profile'), title: 'Mon Profil' },
+  { match: (p) => p.startsWith('/members/'), title: 'Profil membre' },
   { match: (p) => p.startsWith('/admin'), title: 'Administration' },
   { match: (p) => p === '/frais', title: 'Nos frais' },
   { match: (p) => p === '/cgu', title: "Conditions générales d'utilisation" },

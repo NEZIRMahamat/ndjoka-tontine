@@ -6,14 +6,14 @@ import { toast } from 'sonner'
 
 import { useCurrentUser } from '@/app/current-user-context'
 import { useConfirm } from '@/components/shared/confirm-dialog'
-import { BackLink, InitialsAvatar, Panel, PanelHeader, ProgressRing, SkeletonBlock, StatusPill } from '@/components/shared/page-primitives'
+import { BackLink, InitialsAvatar, Panel, PanelHeader, ProgressRing, ScoreChip, SkeletonBlock, StatusPill } from '@/components/shared/page-primitives'
+import { CoverImage } from '@/components/shared/cover-image'
 import { localQuote } from '@/features/fees/fees-api'
 import { launchCycle, type CycleTurn } from '@/features/tontines/cycles-api'
 import { isManagementRole, loadTontineOverview, membershipOfUser, type TontineOverview } from '@/features/tontines/tontine-data'
 import {
   CATEGORY_META,
   ORDER_MODE_META,
-  coverImageFor,
   cycleFrequencyLabels,
   formatLongDate,
   formatMonthYear,
@@ -169,7 +169,7 @@ export default function TontineDetailPage() {
 
       <Panel className="overflow-hidden">
         <div className="relative h-32 bg-slate-200">
-          <img src={coverImageFor(tontine.category, tontine.cover_image_url)} alt="" className="h-full w-full object-cover" />
+          <CoverImage category={tontine.category} src={tontine.cover_image_url} className="absolute inset-0" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           <div className="absolute bottom-3 left-5 flex flex-wrap gap-1.5">
             <span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', category.chip)}>{category.label}</span>
@@ -279,13 +279,19 @@ export default function TontineDetailPage() {
           {activeMembers.map((member) => {
             const turn = orderedTurns.find((item) => item.beneficiary_membership_id === member.id)
             return (
-              <div key={member.id} className="flex items-center gap-3 px-5 py-3">
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => navigate(member.user_id === profile.id ? '/profile' : `/members/${member.user_id}`)}
+                className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50"
+              >
                 <InitialsAvatar name={memberLabel(member)} />
                 <span className="flex-1 truncate text-sm font-medium text-slate-700">{memberLabel(member)}</span>
+                <ScoreChip score={member.reliability_score} provisional={member.reliability_provisional} />
                 {member.role !== 'member' && <span className="hidden text-xs text-slate-400 sm:inline">{membershipRoleLabels[member.role]}</span>}
                 {turn && <span className="text-xs text-slate-400">Tour {turn.position}</span>}
                 {member.user_id === profile.id && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-600">Vous</span>}
-              </div>
+              </button>
             )
           })}
         </div>

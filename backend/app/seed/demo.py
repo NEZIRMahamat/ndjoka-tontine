@@ -24,6 +24,9 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from itertools import product
+from random import Random
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,12 +70,102 @@ COVER_IMAGES = {
     TontineCategory.TRAVEL: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
     TontineCategory.SOLIDARITY: "https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?auto=format&fit=crop&w=1200&q=80",
     TontineCategory.HOUSING: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80",
-    TontineCategory.EDUCATION: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80",
+    TontineCategory.EDUCATION: "https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=1200&q=80",
     TontineCategory.OTHER: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80",
 }
 PRO_EQUIPMENT_IMAGE = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80"
 SCHOOL_IMAGE = "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=80"
 DUBAI_IMAGE = "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80"
+
+
+def _unsplash(photo_id: str) -> str:
+    return (
+        f"https://images.unsplash.com/photo-{photo_id}?auto=format&fit=crop&w=1200&q=80"
+    )
+
+
+# Couvertures vérifiées (HTTP 200) pour varier les visuels des tontines générées.
+COVER_POOLS: dict[TontineCategory, list[str]] = {
+    TontineCategory.BUSINESS: [
+        _unsplash(i)
+        for i in (
+            "1556761175-b413da4baf72",
+            "1521791136064-7986c2920216",
+            "1497366216548-37526070297c",
+            "1454165804606-c3d57bc86b40",
+            "1517245386807-bb43f82c33c4",
+            "1548782033-3ac3a62ece8d",
+        )
+    ],
+    TontineCategory.FAMILY: [
+        _unsplash(i)
+        for i in (
+            "1609220136736-443140cffec6",
+            "1543269865-cbf427effbad",
+            "1529333166437-7750a6dd5a70",
+            "1511895426328-dc8714191300",
+            "1503676260728-1c00da094a0b",
+            "1531206715517-5c0ba140b2b8",
+        )
+    ],
+    TontineCategory.TRAVEL: [
+        _unsplash(i)
+        for i in (
+            "1476514525535-07fb3b4ae5f1",
+            "1488646953014-85cb44e25828",
+            "1502920917128-1aa500764cbd",
+            "1507525428034-b723cf961d3e",
+            "1512453979798-5ea266f8880c",
+            "1517048676732-d65bc937f952",
+        )
+    ],
+    TontineCategory.SOLIDARITY: [
+        _unsplash(i)
+        for i in (
+            "1559027615-cd4628902d4a",
+            "1593113598332-cd288d649433",
+            "1582213782179-e0d53f98f2ca",
+            "1469571486292-0ba58a3f068b",
+            "1573164713988-8665fc963095",
+            "1522202176988-66273c2fd55f",
+        )
+    ],
+    TontineCategory.HOUSING: [
+        _unsplash(i)
+        for i in (
+            "1568605114967-8130f3a36994",
+            "1502672260266-1c1ef2d93688",
+            "1484154218962-a197022b5858",
+            "1560518883-ce09059eeffa",
+            "1600585154340-be6161a56a0c",
+            "1523240795612-9a054b0db644",
+        )
+    ],
+    TontineCategory.EDUCATION: [
+        _unsplash(i)
+        for i in (
+            "1427504494785-3a9ca7044f45",
+            "1509062522246-3755977927d7",
+            "1524995997946-a1c2e315a42f",
+            "1503676260728-1c00da094a0b",
+            "1516321318423-f06f85e504b3",
+            "1604014237800-1c9102c219da",
+        )
+    ],
+    TontineCategory.OTHER: [
+        _unsplash(i)
+        for i in (
+            "1511632765486-a01980e01a18",
+            "1517457373958-b7bdd4587205",
+            "1492684223066-81342ee5ff30",
+            "1529156069898-49953e39b3ac",
+            "1522202176988-66273c2fd55f",
+            "1531206715517-5c0ba140b2b8",
+        )
+    ],
+}
+
+Behavior = Literal["reliable", "occasional", "unreliable"]
 
 
 @dataclass(frozen=True)
@@ -81,6 +174,7 @@ class Persona:
     name: str
     city: str
     phone: str | None = None
+    behavior: Behavior = "reliable"
 
 
 @dataclass
@@ -94,17 +188,14 @@ PERSONAS: dict[str, Persona] = {p.slug: p for p in [
     Persona("awa.ndiaye", "Awa Ndiaye", "Paris", "+33612345601"),
     Persona("fatou.sow", "Fatou Sow", "Paris", "+33612345602"),
     Persona("aminata.fall", "Aminata Fall", "Saint-Denis"),
-    Persona("rokhaya.diallo", "Rokhaya Diallo", "Montreuil"),
     Persona("ndeye.mbaye", "Ndèye Mbaye", "Paris"),
     Persona("binta.camara", "Binta Camara", "Créteil"),
     Persona("aissatou.ba", "Aïssatou Ba", "Paris"),
     Persona("coumba.sarr", "Coumba Sarr", "Évry"),
-    Persona("marieme.thiam", "Marième Thiam", "Paris"),
     Persona("sophie.martin", "Sophie Martin", "Paris", "+33612345610"),
     Persona("claire.bernard", "Claire Bernard", "Paris"),
     Persona("isabelle.morel", "Isabelle Morel", "Boulogne-Billancourt"),
     Persona("nathalie.dupont", "Nathalie Dupont", "Paris"),
-    Persona("sandrine.petit", "Sandrine Petit", "Vincennes"),
     Persona("valerie.leroy", "Valérie Leroy", "Paris"),
     Persona("cecile.simon", "Cécile Simon", "Nanterre"),
     Persona("karim.benali", "Karim Benali", "Lyon", "+33612345620"),
@@ -129,8 +220,38 @@ PERSONAS: dict[str, Persona] = {p.slug: p for p in [
     Persona("khadija.el-amrani", "Khadija El Amrani", "Paris"),
     Persona("thomas.lefevre", "Thomas Lefèvre", "Paris"),
     Persona("mariam.cisse", "Mariam Cissé", "Marseille"),
-    Persona("julien.moreau", "Julien Moreau", "Toulouse"),
     Persona("aminata.diop", "Aminata Diop", "Paris"),
+    # Profils irréguliers : quelques retards, un ou deux impayés.
+    Persona("rokhaya.diallo", "Rokhaya Diallo", "Montreuil", behavior="occasional"),
+    Persona("marieme.thiam", "Marième Thiam", "Paris", behavior="occasional"),
+    Persona("sandrine.petit", "Sandrine Petit", "Vincennes", behavior="occasional"),
+    Persona("julien.moreau", "Julien Moreau", "Toulouse", behavior="occasional"),
+    Persona("fanta.kanoute", "Fanta Kanouté", "Paris", behavior="occasional"),
+    Persona("pierre.lambert", "Pierre Lambert", "Lyon", behavior="occasional"),
+    Persona("awa.sylla", "Awa Sylla", "Marseille", behavior="occasional"),
+    Persona("mehdi.bouzid", "Mehdi Bouzid", "Lille", behavior="occasional"),
+    # Profils défaillants : score sous 50 pour la démonstration.
+    Persona("kevin.durand", "Kevin Durand", "Paris", behavior="unreliable"),
+    Persona("bintou.fofana", "Bintou Fofana", "Saint-Denis", behavior="unreliable"),
+    Persona("ousmane.sow", "Ousmane Sow", "Lyon", behavior="unreliable"),
+    Persona("laura.martin", "Laura Martin", "Bordeaux", behavior="unreliable"),
+    Persona("abdou.ndiaye", "Abdou Ndiaye", "Marseille", behavior="unreliable"),
+    Persona("celine.roux", "Céline Roux", "Nantes", behavior="unreliable"),
+    Persona("boubacar.toure", "Boubacar Touré", "Paris", behavior="unreliable"),
+    Persona("maeva.girard", "Maëva Girard", "Toulouse", behavior="unreliable"),
+    # Profils fiables supplémentaires pour peupler les groupes.
+    Persona("ismael.diallo", "Ismaël Diallo", "Paris"),
+    Persona("clara.petit", "Clara Petit", "Lyon"),
+    Persona("moussa.kone", "Moussa Koné", "Marseille"),
+    Persona("elodie.marchand", "Élodie Marchand", "Paris"),
+    Persona("souleymane.ba", "Souleymane Ba", "Lille"),
+    Persona("camille.dubois", "Camille Dubois", "Nantes"),
+    Persona("aicha.traore", "Aïcha Traoré", "Paris"),
+    Persona("hugo.leroux", "Hugo Leroux", "Bordeaux"),
+    Persona("mariama.barry", "Mariama Barry", "Paris"),
+    Persona("antoine.mercier", "Antoine Mercier", "Strasbourg"),
+    Persona("djeneba.coulibaly", "Djénéba Coulibaly", "Lyon"),
+    Persona("nicolas.faure", "Nicolas Faure", "Paris"),
 ]}
 # fmt: on
 
@@ -458,6 +579,10 @@ async def seed_turn(
         status=PayoutStatus.PENDING,
         scheduled_for=turn.scheduled_for,
     )
+    if payout_state == "received" and available < expected:
+        # Un pot incomplet ne peut pas être versé : le versement reste en attente
+        # jusqu'à régularisation des cotisations manquantes.
+        payout_state = "pending"
     if payout_state == "received":
         paid_at = turn.scheduled_for + timedelta(days=1)
         payout.status = PayoutStatus.RECEIVED
@@ -938,7 +1063,7 @@ OPEN_TONTINES: list[TontineSpec] = [
         ],
         contribution=Decimal("200.00"),
         frequency=CycleFrequency.MONTHLY,
-        max_members=15,
+        max_members=12,
         order_mode=TurnOrderMode.LOTTERY,
         goal="Financer un projet professionnel sans crédit",
         rules=(
@@ -1007,7 +1132,7 @@ OPEN_TONTINES: list[TontineSpec] = [
         name="Achat Matériel Pro",
         description=(
             "Tontine pour indépendants souhaitant financer l'achat de matériel ou "
-            "d'équipements professionnels. Capital de 10 000 € par tour."
+            "d'équipements professionnels. Capital de 6 000 € par tour."
         ),
         category=TontineCategory.BUSINESS,
         city="Paris",
@@ -1023,18 +1148,10 @@ OPEN_TONTINES: list[TontineSpec] = [
             "khadija.el-amrani",
             "mamadou.keita",
             "amelie.fontaine",
-            "ibrahima.ndour",
-            "paul.nguyen",
-            "nadia.mansour",
-            "chloe.robert",
-            "yanis.amrani",
-            "leila.haddad",
-            "moussa.traore",
-            "karim.benali",
         ],
         contribution=Decimal("500.00"),
         frequency=CycleFrequency.MONTHLY,
-        max_members=20,
+        max_members=12,
         order_mode=TurnOrderMode.LOTTERY,
         goal="Équiper son activité",
         rules=(
@@ -1115,7 +1232,7 @@ OPEN_TONTINES: list[TontineSpec] = [
         ],
         contribution=Decimal("30.00"),
         frequency=CycleFrequency.WEEKLY,
-        max_members=15,
+        max_members=12,
         order_mode=TurnOrderMode.REGISTRATION,
         goal="Faire face aux imprévus ensemble",
         rules="Cotisation chaque vendredi. Aucun justificatif demandé. Bienveillance exigée.",
@@ -1152,6 +1269,551 @@ async def seed_open_tontines(ctx: SeedContext) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Tontines générées : combinaisons catégorie × rythme × ordre de passage,
+# statuts variés, 2 à 12 membres, comportements de paiement contrastés.
+# ---------------------------------------------------------------------------
+
+GENERATED_NAMES: dict[TontineCategory, list[tuple[str, str, str]]] = {
+    TontineCategory.BUSINESS: [
+        (
+            "Commerçants de Château-Rouge",
+            "Commerçants du quartier qui financent leur stock à tour de rôle.",
+            "Renouveler le stock",
+        ),
+        (
+            "Freelances Créatifs",
+            "Graphistes, photographes et vidéastes qui s'équipent ensemble.",
+            "Matériel professionnel",
+        ),
+        (
+            "Artisans du Bâtiment",
+            "Artisans qui avancent la trésorerie des chantiers.",
+            "Trésorerie de chantier",
+        ),
+        (
+            "Coiffeuses Afro Paris",
+            "Salons de coiffure qui investissent dans leur boutique.",
+            "Aménagement du salon",
+        ),
+        (
+            "Chauffeurs VTC Lyon",
+            "Chauffeurs qui préparent l'achat ou l'entretien de leur véhicule.",
+            "Véhicule et assurance",
+        ),
+        (
+            "Traiteurs Événementiel",
+            "Traiteurs indépendants qui financent leur matériel de cuisine.",
+            "Équipement de cuisine",
+        ),
+    ],
+    TontineCategory.FAMILY: [
+        (
+            "Cousins de Thiès",
+            "Cousins installés en France qui s'entraident pour les grandes occasions.",
+            "Cérémonies familiales",
+        ),
+        (
+            "Famille Traoré",
+            "Épargne familiale pour les projets de chacun.",
+            "Projets personnels",
+        ),
+        (
+            "Mamans du 93",
+            "Mamans du quartier qui préparent les dépenses des enfants.",
+            "Dépenses des enfants",
+        ),
+        (
+            "Fratrie Ben Salem",
+            "Frères et sœurs qui constituent une réserve commune.",
+            "Réserve familiale",
+        ),
+        (
+            "Belles-sœurs Solidaires",
+            "Groupe familial pour anticiper les fêtes et les voyages au pays.",
+            "Voyage au pays",
+        ),
+        (
+            "Tontine des Grands-Parents",
+            "Grands-parents qui gâtent leurs petits-enfants à tour de rôle.",
+            "Cadeaux et vacances",
+        ),
+    ],
+    TontineCategory.TRAVEL: [
+        (
+            "Retour au Pays 2027",
+            "Financer les billets pour les vacances d'été au pays.",
+            "Billets d'avion",
+        ),
+        (
+            "Road Trip Portugal",
+            "Amis qui préparent un road trip en van.",
+            "Location et essence",
+        ),
+        (
+            "Pèlerinage en Famille",
+            "Préparer sereinement un pèlerinage.",
+            "Voyage et hébergement",
+        ),
+        (
+            "Week-ends Européens",
+            "Un city-trip par bénéficiaire, à tour de rôle.",
+            "Escapades",
+        ),
+        (
+            "Découverte du Maroc",
+            "Collègues qui préparent un séjour au Maroc.",
+            "Séjour organisé",
+        ),
+        (
+            "Croisière des Anciens",
+            "Anciens collègues retraités qui rêvent de croisière.",
+            "Croisière",
+        ),
+    ],
+    TontineCategory.SOLIDARITY: [
+        (
+            "Entraide Voisins Lyon 8",
+            "Voisins qui font face ensemble aux coups durs.",
+            "Imprévus du quotidien",
+        ),
+        (
+            "Caisse Étudiants Étrangers",
+            "Étudiants internationaux qui s'entraident pour les frais imprévus.",
+            "Frais imprévus",
+        ),
+        (
+            "Solidarité Marché de Wazemmes",
+            "Vendeurs du marché qui se serrent les coudes.",
+            "Aléas de saison",
+        ),
+        (
+            "Coup de Pouce Mamans Solo",
+            "Mères célibataires qui s'épaulent financièrement.",
+            "Souffle financier",
+        ),
+        (
+            "Cercle des Aidants",
+            "Aidants familiaux qui se constituent une réserve.",
+            "Réserve de précaution",
+        ),
+        (
+            "Tontine du Foyer Saint-Ouen",
+            "Résidents d'un foyer qui préparent leur installation.",
+            "Installation",
+        ),
+    ],
+    TontineCategory.HOUSING: [
+        (
+            "Premier Appartement",
+            "Jeunes actifs qui constituent leur dépôt de garantie et leur mobilier.",
+            "Dépôt de garantie",
+        ),
+        (
+            "Travaux de Rénovation",
+            "Propriétaires qui financent leurs travaux les uns après les autres.",
+            "Rénovation",
+        ),
+        (
+            "Terrain au Village",
+            "Diaspora qui achète un terrain pour construire au pays.",
+            "Achat de terrain",
+        ),
+        (
+            "Déménagement Sans Stress",
+            "Collègues mutés qui financent leur déménagement.",
+            "Déménagement",
+        ),
+        (
+            "Électroménager Neuf",
+            "Remplacer les gros appareils sans crédit à la consommation.",
+            "Électroménager",
+        ),
+        (
+            "Apport Maison Familiale",
+            "Constituer un apport pour un premier achat.",
+            "Apport immobilier",
+        ),
+    ],
+    TontineCategory.EDUCATION: [
+        (
+            "Frais de Scolarité Privée",
+            "Parents qui règlent les frais de scolarité par trimestre.",
+            "Scolarité",
+        ),
+        (
+            "Formation Reconversion",
+            "Adultes en reconversion qui financent une formation certifiante.",
+            "Formation professionnelle",
+        ),
+        (
+            "Permis de Conduire Jeunes",
+            "Parents qui financent le permis de leurs enfants.",
+            "Permis de conduire",
+        ),
+        (
+            "Ordinateurs pour la Fac",
+            "Étudiants qui s'équipent en matériel informatique.",
+            "Matériel informatique",
+        ),
+        (
+            "Cours de Langues",
+            "Financer des séjours linguistiques.",
+            "Séjour linguistique",
+        ),
+        (
+            "Bourse du Quartier",
+            "Voisins qui financent les études d'un jeune du quartier à tour de rôle.",
+            "Études supérieures",
+        ),
+    ],
+    TontineCategory.OTHER: [
+        (
+            "Mariage de Fatou et Karim",
+            "Proches qui participent aux frais du mariage.",
+            "Mariage",
+        ),
+        ("Fête de Quartier", "Association qui prépare la fête annuelle.", "Événement"),
+        (
+            "Équipe de Foot des Vétérans",
+            "Joueurs qui financent équipements et déplacements.",
+            "Équipements sportifs",
+        ),
+        ("Chorale Gospel", "Choristes qui préparent tournée et costumes.", "Tournée"),
+        (
+            "Club Photo Argentique",
+            "Passionnés qui s'offrent du matériel à tour de rôle.",
+            "Matériel photo",
+        ),
+        (
+            "Jardin Partagé",
+            "Jardiniers qui investissent dans serre et outillage.",
+            "Outillage",
+        ),
+    ],
+}
+
+GENERATED_CITIES = [
+    "Paris",
+    "Lyon",
+    "Marseille",
+    "Lille",
+    "Bordeaux",
+    "Toulouse",
+    "Nantes",
+    "Strasbourg",
+    "Saint-Denis",
+    "Montreuil",
+]
+GENERATED_AMOUNTS = [
+    Decimal(v)
+    for v in (
+        "20.00",
+        "30.00",
+        "50.00",
+        "75.00",
+        "100.00",
+        "120.00",
+        "150.00",
+        "200.00",
+        "250.00",
+        "300.00",
+        "400.00",
+        "500.00",
+    )
+]
+GeneratedStatus = Literal[
+    "active", "recruiting", "scheduled", "completed", "private_draft"
+]
+GENERATED_STATUSES: list[GeneratedStatus] = [
+    "active",
+    "recruiting",
+    "active",
+    "scheduled",
+    "completed",
+    "recruiting",
+    "active",
+    "private_draft",
+]
+GENERATED_RULES = [
+    "Cotisation avant l'échéance. Prévenir le groupe en cas de difficulté.",
+    "Un retard toléré par cycle. Au-delà, le groupe est informé.",
+    "Engagement sur toute la durée du cycle, y compris après avoir reçu son tour.",
+    None,
+]
+
+
+def _behavior_of(key: str) -> Behavior:
+    if key == PRESENTER_KEY or key.startswith("presenter-"):
+        return "reliable"
+    return PERSONAS[key].behavior
+
+
+def _past_state(behavior: Behavior, rng: Random) -> tuple[str, int]:
+    """État d'une cotisation d'un tour passé selon le comportement du membre."""
+    roll = rng.random()
+    if behavior == "reliable":
+        return ("confirmed", 0) if roll < 0.92 else ("confirmed", rng.randint(2, 5))
+    if behavior == "occasional":
+        if roll < 0.55:
+            return "confirmed", 0
+        if roll < 0.90:
+            return "confirmed", rng.randint(2, 9)
+        return "pending", 0
+    if roll < 0.25:
+        return "confirmed", 0
+    if roll < 0.60:
+        return "confirmed", rng.randint(4, 15)
+    if roll < 0.80:
+        return "pending", 0
+    return "rejected", 0
+
+
+def _current_state(behavior: Behavior, rng: Random) -> str:
+    roll = rng.random()
+    if behavior == "reliable":
+        return "confirmed" if roll < 0.6 else "declared" if roll < 0.85 else "pending"
+    if behavior == "occasional":
+        return "confirmed" if roll < 0.35 else "declared" if roll < 0.6 else "pending"
+    return "pending" if roll < 0.6 else "rejected" if roll < 0.8 else "declared"
+
+
+def build_generated_specs(rng: Random) -> list[tuple[TontineSpec, GeneratedStatus]]:
+    """Une tontine par combinaison (catégorie, rythme, ordre) échantillonnée."""
+    combos = list(
+        product(list(TontineCategory), list(CycleFrequency), list(TurnOrderMode))
+    )
+    rng.shuffle(combos)
+    combos = combos[:30]
+    reliable = [k for k, p in PERSONAS.items() if p.behavior == "reliable"]
+    occasional = [k for k, p in PERSONAS.items() if p.behavior == "occasional"]
+    unreliable = [k for k, p in PERSONAS.items() if p.behavior == "unreliable"]
+    name_cursor: dict[TontineCategory, int] = {c: 0 for c in TontineCategory}
+    specs: list[tuple[TontineSpec, GeneratedStatus]] = []
+    for index, (category, frequency, order_mode) in enumerate(combos):
+        names = GENERATED_NAMES[category]
+        name, description, goal = names[name_cursor[category] % len(names)]
+        covers = COVER_POOLS[category]
+        cover = covers[name_cursor[category] % len(covers)]
+        name_cursor[category] += 1
+        status = GENERATED_STATUSES[index % len(GENERATED_STATUSES)]
+        max_members = rng.randint(2, 12)
+        filled = (
+            max_members
+            if status in {"active", "scheduled", "completed"}
+            else rng.randint(1, max(1, max_members - 1))
+        )
+        pool = rng.sample(reliable, k=min(len(reliable), max(1, round(filled * 0.6))))
+        pool += rng.sample(occasional, k=min(len(occasional), round(filled * 0.25)))
+        pool += rng.sample(
+            unreliable, k=min(len(unreliable), max(0, filled - len(pool)))
+        )
+        pool = pool[:filled]
+        while len(pool) < filled:
+            candidate = rng.choice(reliable + occasional + unreliable)
+            if candidate not in pool:
+                pool.append(candidate)
+        rng.shuffle(pool)
+        owner = next((k for k in pool if _behavior_of(k) == "reliable"), pool[0])
+        members = [owner, *[k for k in pool if k != owner]]
+        if index in (0, 5) and status in {"active", "scheduled"}:
+            if len(members) >= max_members:
+                members = members[:-1]
+            members.append(PRESENTER_KEY)
+        amount = rng.choice(
+            GENERATED_AMOUNTS[:8]
+            if frequency == CycleFrequency.WEEKLY
+            else GENERATED_AMOUNTS
+        )
+        discoverable = status == "recruiting" or (
+            status == "active" and rng.random() < 0.3
+        )
+        min_score = (
+            rng.choice([None, None, None, Decimal("0.450"), Decimal("0.650")])
+            if discoverable
+            else None
+        )
+        specs.append(
+            (
+                TontineSpec(
+                    key=f"gen-{index}",
+                    name=name,
+                    description=description,
+                    category=category,
+                    city=rng.choice(GENERATED_CITIES),
+                    owner=owner,
+                    members=members,
+                    contribution=amount,
+                    frequency=frequency,
+                    max_members=max_members,
+                    order_mode=order_mode,
+                    goal=goal,
+                    rules=rng.choice(GENERATED_RULES),
+                    late_penalty=rng.random() < 0.6,
+                    discoverable=discoverable,
+                    min_score=min_score,
+                    cover=cover,
+                    treasurer=next(
+                        (k for k in members[1:] if _behavior_of(k) == "reliable"), None
+                    ),
+                ),
+                status,
+            )
+        )
+    return specs
+
+
+def _period_start(
+    today: date, frequency: CycleFrequency, periods_ago: int, rng: Random
+) -> date:
+    if frequency == CycleFrequency.WEEKLY:
+        return today - timedelta(weeks=periods_ago, days=rng.randint(0, 6))
+    return months_ago(today, periods_ago, rng.randint(1, 28))
+
+
+def _states_for_past_turn(
+    order: list[str], rng: Random
+) -> tuple[dict[str, str], dict[str, int]]:
+    states: dict[str, str] = {}
+    late: dict[str, int] = {}
+    for key in order:
+        state, late_days = _past_state(_behavior_of(key), rng)
+        states[key] = state
+        if late_days:
+            late[key] = late_days
+    return states, late
+
+
+async def seed_generated_tontines(ctx: SeedContext) -> None:
+    rng = Random(2026)
+    for spec, status in build_generated_specs(rng):
+        turns_total = len(spec.members)
+        if status in {"recruiting", "private_draft"}:
+            tontine, memberships = await create_tontine(
+                ctx,
+                spec,
+                status=TontineStatus.DRAFT,
+                created_days_ago=rng.randint(3, 40),
+            )
+            await create_cycle(
+                ctx,
+                tontine,
+                spec,
+                memberships,
+                start_date=ctx.today + timedelta(days=rng.randint(7, 60)),
+                status=CycleStatus.DRAFT,
+            )
+            continue
+        if status == "scheduled":
+            tontine, memberships = await create_tontine(
+                ctx,
+                spec,
+                status=TontineStatus.DRAFT,
+                created_days_ago=rng.randint(10, 30),
+            )
+            await create_cycle(
+                ctx,
+                tontine,
+                spec,
+                memberships,
+                start_date=ctx.today + timedelta(days=rng.randint(2, 14)),
+                status=CycleStatus.SCHEDULED,
+                order=spec.members,
+            )
+            continue
+        order = list(spec.members)
+        if spec.order_mode == TurnOrderMode.LOTTERY:
+            rng.shuffle(order)
+        confirmer = ctx.users[spec.treasurer or spec.owner]
+        if status == "completed":
+            tontine, memberships = await create_tontine(
+                ctx,
+                spec,
+                status=TontineStatus.ARCHIVED,
+                created_days_ago=turns_total * 31 + 60,
+            )
+            start = _period_start(ctx.today, spec.frequency, turns_total + 1, rng)
+            cycle, turns = await create_cycle(
+                ctx,
+                tontine,
+                spec,
+                memberships,
+                start_date=start,
+                status=CycleStatus.COMPLETED,
+                order=order,
+            )
+            for turn in turns:
+                states, late = _states_for_past_turn(order, rng)
+                await seed_turn(
+                    ctx,
+                    tontine,
+                    cycle,
+                    turn,
+                    memberships,
+                    order,
+                    states,
+                    confirmer,
+                    payout_state="received",
+                    late=late,
+                )
+            continue
+        elapsed = rng.randint(1, max(1, turns_total - 1))
+        tontine, memberships = await create_tontine(
+            ctx, spec, status=TontineStatus.ACTIVE, created_days_ago=elapsed * 31 + 20
+        )
+        start = _period_start(ctx.today, spec.frequency, elapsed, rng)
+        cycle, turns = await create_cycle(
+            ctx,
+            tontine,
+            spec,
+            memberships,
+            start_date=start,
+            status=CycleStatus.ACTIVE,
+            order=order,
+        )
+        for turn in turns:
+            if turn.scheduled_for < ctx.now - timedelta(days=3):
+                states, late = _states_for_past_turn(order, rng)
+                all_paid = all(value == "confirmed" for value in states.values())
+                await seed_turn(
+                    ctx,
+                    tontine,
+                    cycle,
+                    turn,
+                    memberships,
+                    order,
+                    states,
+                    confirmer,
+                    payout_state="received" if all_paid else "pending",
+                    late=late,
+                )
+            elif turn.scheduled_for <= ctx.now + timedelta(days=10):
+                states = {key: _current_state(_behavior_of(key), rng) for key in order}
+                await seed_turn(
+                    ctx,
+                    tontine,
+                    cycle,
+                    turn,
+                    memberships,
+                    order,
+                    states,
+                    confirmer,
+                    payout_state="pending",
+                )
+            else:
+                await seed_turn(
+                    ctx,
+                    tontine,
+                    cycle,
+                    turn,
+                    memberships,
+                    order,
+                    {},
+                    confirmer,
+                    payout_state="pending",
+                )
+
+
 async def seed_demo(
     session: AsyncSession, presenters: list[Presenter]
 ) -> dict[str, int]:
@@ -1169,6 +1831,7 @@ async def seed_demo(
     await seed_business_tontine(ctx)
     await seed_scheduled_tontine(ctx)
     await seed_open_tontines(ctx)
+    await seed_generated_tontines(ctx)
     await session.commit()
     return ctx.created
 

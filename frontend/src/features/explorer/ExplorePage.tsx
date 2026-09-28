@@ -7,7 +7,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ErrorNotice, SkeletonBlock } from '@/components/shared/page-primitives'
 import { discoverTontines, type DiscoveredTontine, type DiscoveryResult } from '@/features/explorer/discovery-api'
 import { GUIDES, guideImageFor } from '@/features/explorer/guides-content'
-import { CATEGORY_META, CATEGORY_ORDER, coverImageFor, frequencyShortLabels } from '@/features/tontines/tontine-presentation'
+import { CoverImage } from '@/components/shared/cover-image'
+import { CATEGORY_META, CATEGORY_ORDER, frequencyShortLabels } from '@/features/tontines/tontine-presentation'
 import type { TontineCategory } from '@/features/tontines/tontines-api'
 import { formatCurrencyAmount } from '@/lib/format'
 import { messageOf } from '@/lib/http'
@@ -50,7 +51,7 @@ function TontineCard({ tontine, onClick }: { tontine: DiscoveredTontine; onClick
       className="group cursor-pointer overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm transition-all hover:border-emerald-200 hover:shadow-md"
     >
       <div className="relative h-40 overflow-hidden">
-        <img src={coverImageFor(tontine.category, tontine.cover_image_url)} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+        <CoverImage category={tontine.category} src={tontine.cover_image_url} className="absolute inset-0" imgClassName="transition-transform duration-500 group-hover:scale-105" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
           {tagsFor(tontine).map((tag) => <span key={tag.label} className={cn('rounded-md px-2 py-0.5 text-xs font-bold shadow-sm', tag.className)}>{tag.label}</span>)}

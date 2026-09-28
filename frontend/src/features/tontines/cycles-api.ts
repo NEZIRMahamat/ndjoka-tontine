@@ -95,6 +95,10 @@ export type TontineMembership = {
   tontine_id: string
   user_id: string
   display_name: string | null
+  avatar_url?: string | null
+  reliability_score?: string | null
+  reliability_band?: string | null
+  reliability_provisional?: boolean | null
   role: MembershipRole
   status: 'active' | 'left' | 'removed'
   joined_at: string

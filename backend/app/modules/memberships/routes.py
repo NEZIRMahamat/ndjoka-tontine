@@ -23,6 +23,7 @@ from app.modules.memberships.schemas import (
     MembershipRoleUpdate,
     OwnershipTransfer,
 )
+from app.modules.profiles.reliability import get_reliability
 from app.modules.tontines.models import Tontine
 from app.modules.users.dependencies import get_current_active_user
 from app.modules.users.models import User
@@ -154,13 +155,23 @@ async def list_members(
     items, total = await services.list_members(
         session, tontine_id, limit=limit, offset=offset
     )
-    return MembershipList(
-        items=[
+    enriched = []
+    for item in items:
+        reliability = await get_reliability(session, item.user_id)
+        enriched.append(
             MembershipRead.model_validate(
-                {**item.__dict__, "display_name": item.user.display_name}
+                {
+                    **item.__dict__,
+                    "display_name": item.user.display_name,
+                    "avatar_url": item.user.avatar_url,
+                    "reliability_score": reliability.score,
+                    "reliability_band": reliability.band,
+                    "reliability_provisional": reliability.is_provisional,
+                }
             )
-            for item in items
-        ],
+        )
+    return MembershipList(
+        items=enriched,
         total=total,
         limit=limit,
         offset=offset,

@@ -5,15 +5,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { useConfirm } from '@/components/shared/confirm-dialog'
-import { BackLink, InitialsAvatar, SkeletonBlock } from '@/components/shared/page-primitives'
-import { getDiscoveredTontine, joinTontine, type DiscoveredTontine } from '@/features/explorer/discovery-api'
+import { CoverImage } from '@/components/shared/cover-image'
+import { BackLink, InitialsAvatar, ScoreChip, SkeletonBlock } from '@/components/shared/page-primitives'
+import { getDiscoverableMembers, getDiscoveredTontine, joinTontine, type DiscoveredMember, type DiscoveredTontine } from '@/features/explorer/discovery-api'
 import { localQuote } from '@/features/fees/fees-api'
-import { CATEGORY_META, ORDER_MODE_META, coverImageFor, cycleFrequencyLabels, formatLongDate, formatMonthYear, frequencyShortLabels } from '@/features/tontines/tontine-presentation'
+import { CATEGORY_META, ORDER_MODE_META, cycleFrequencyLabels, formatLongDate, formatMonthYear, frequencyShortLabels, membershipRoleLabels } from '@/features/tontines/tontine-presentation'
 import { formatCurrencyAmount } from '@/lib/format'
 import { messageOf } from '@/lib/http'
 import { cn } from '@/lib/utils'
-
-const ANON_COLORS = ['bg-emerald-500', 'bg-teal-500', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500', 'bg-orange-500', 'bg-indigo-500']
 
 export default function ExploreTontineDetailPage() {
   const { tontineId } = useParams<{ tontineId: string }>()
@@ -21,6 +20,7 @@ export default function ExploreTontineDetailPage() {
   const confirm = useConfirm()
   const { getAccessTokenSilently } = useAuth0()
   const [tontine, setTontine] = useState<DiscoveredTontine | null>(null)
+  const [members, setMembers] = useState<DiscoveredMember[] | null>(null)
   const [error, setError] = useState('')
   const [joining, setJoining] = useState(false)
 
@@ -33,6 +33,8 @@ export default function ExploreTontineDetailPage() {
         const token = await getAccessTokenSilently()
         const item = await getDiscoveredTontine(token, tontineId, controller.signal)
         if (active) setTontine(item)
+        const list = await getDiscoverableMembers(token, tontineId, controller.signal).catch(() => [] as DiscoveredMember[])
+        if (active) setMembers(list)
       } catch (caught) {
         if (active && !controller.signal.aborted) setError(messageOf(caught, 'Tontine introuvable ou non ouverte.'))
       }
@@ -90,7 +92,7 @@ export default function ExploreTontineDetailPage() {
       <BackLink to="/explore" label="Explorer" />
 
       <div className="relative h-52 overflow-hidden rounded-2xl shadow-sm sm:h-64">
-        <img src={coverImageFor(tontine.category, tontine.cover_image_url)} alt="" className="h-full w-full object-cover" />
+        <CoverImage category={tontine.category} src={tontine.cover_image_url} className="absolute inset-0" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
         <div className="absolute right-5 bottom-4 left-5 flex items-end justify-between gap-3">
           <div>
@@ -157,17 +159,42 @@ export default function ExploreTontineDetailPage() {
             </ul>
           </div>
 
-          <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h3 className="mb-3 flex items-center gap-2 font-bold text-slate-800"><Users size={16} className="text-slate-400" /> Membres ({tontine.member_count})</h3>
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: Math.min(tontine.member_count, 24) }).map((_, index) => (
-                <div key={index} className={cn('flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white', ANON_COLORS[index % ANON_COLORS.length])} title="Membre">
-                  {String.fromCharCode(65 + (index % 26))}
-                </div>
-              ))}
-              {spotsLeft !== null && spotsLeft > 0 && <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed border-slate-300 text-xs text-slate-400">+{spotsLeft}</div>}
+          <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-5 py-3">
+              <h3 className="flex items-center gap-2 text-sm font-bold tracking-wider text-slate-500 uppercase"><Users size={15} /> Membres ({tontine.member_count})</h3>
+              <span className="text-xs text-slate-400">Avec qui vous ferez tontine</span>
             </div>
-            <p className="mt-3 text-xs text-slate-400">Les informations personnelles des membres sont confidentielles jusqu'à votre adhésion.</p>
+            {members === null ? (
+              <div className="space-y-3 p-5"><SkeletonBlock className="h-10" /><SkeletonBlock className="h-10" /><SkeletonBlock className="h-10" /></div>
+            ) : members.length === 0 ? (
+              <p className="px-5 py-6 text-center text-sm text-slate-400">Aucun membre pour le moment : vous seriez parmi les premiers.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {members.map((member) => (
+                  <button
+                    key={member.user_id}
+                    type="button"
+                    onClick={() => navigate(`/members/${member.user_id}`)}
+                    className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50"
+                  >
+                    <InitialsAvatar name={member.display_name ?? 'Membre'} className="h-9 w-9" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-700">{member.display_name ?? 'Membre Ndjoka'}</p>
+                      <p className="truncate text-xs text-slate-400">
+                        {membershipRoleLabels[member.role]}
+                        {member.city ? ` · ${member.city}` : ''}
+                        {` · membre depuis ${formatMonthYear(member.member_since)}`}
+                      </p>
+                    </div>
+                    {member.turn_position !== null && <span className="hidden text-xs text-slate-400 sm:inline">Tour {member.turn_position}</span>}
+                    <ScoreChip score={member.reliability_score} provisional={member.reliability_provisional} />
+                  </button>
+                ))}
+              </div>
+            )}
+            {spotsLeft !== null && spotsLeft > 0 && (
+              <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">{spotsLeft} place{spotsLeft > 1 ? 's' : ''} encore disponible{spotsLeft > 1 ? 's' : ''}. Seuls le nom, la ville, l'ancienneté et le score de fiabilité des membres sont visibles.</p>
+            )}
           </div>
 
           {(rules.length > 0 || tontine.late_penalty_enabled) && (

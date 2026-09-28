@@ -86,7 +86,7 @@ export default function PaymentsPage() {
         <div className="absolute top-0 right-0 -mt-16 -mr-16 rounded-full bg-white/5 p-32 blur-3xl" />
         <div className="relative z-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div>
-            <p className="mb-1 font-medium text-slate-400">Épargne cotisée</p>
+            <p className="mb-1 font-medium text-slate-400">Total cotisé</p>
             {!data ? <SkeletonBlock className="mb-4 h-10 w-40 bg-white/10" /> : <h3 className="mb-1 text-4xl font-bold">{formatCurrencyAmount(totals.saved, totals.currency)}</h3>}
             <p className="mb-4 text-sm text-slate-400">
               {data ? `${formatCurrencyAmount(totals.received, totals.currency)} déjà reçus en levées · ${totals.dueCount} cotisation${totals.dueCount > 1 ? 's' : ''} à venir (${formatCurrencyAmount(totals.dueAmount, totals.currency)})` : ''}

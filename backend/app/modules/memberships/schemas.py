@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -76,6 +77,10 @@ class MembershipRead(BaseModel):
     tontine_id: UUID
     user_id: UUID
     display_name: str | None = None
+    avatar_url: str | None = None
+    reliability_score: Decimal | None = None
+    reliability_band: str | None = None
+    reliability_provisional: bool | None = None
     role: MembershipRole
     status: MembershipStatus
     joined_at: datetime

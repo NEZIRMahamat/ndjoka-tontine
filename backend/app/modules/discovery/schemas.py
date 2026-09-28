@@ -56,3 +56,25 @@ class DiscoveryList(BaseModel):
     offset: int
     has_profile: bool
     reliability_score: Decimal
+
+
+class DiscoveredMember(BaseModel):
+    """Membre d'une tontine ouverte, tel qu'un futur adhérent peut le voir :
+    identité affichée et réputation uniquement."""
+
+    user_id: UUID
+    display_name: str | None
+    avatar_url: str | None
+    city: str | None
+    role: str
+    joined_at: datetime
+    member_since: datetime
+    reliability_score: Decimal
+    reliability_band: str
+    reliability_provisional: bool
+    turn_position: int | None
+
+
+class DiscoveredMemberList(BaseModel):
+    items: list[DiscoveredMember]
+    total: int

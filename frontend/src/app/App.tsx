@@ -24,6 +24,7 @@ const PaymentMethodsPage = lazy(() => import('@/features/profile/PaymentMethodsP
 const SecurityPage = lazy(() => import('@/features/profile/SecurityPage'))
 const NotificationSettingsPage = lazy(() => import('@/features/profile/NotificationSettingsPage'))
 const SaverProfilePage = lazy(() => import('@/features/profile/SaverProfilePage'))
+const PublicProfilePage = lazy(() => import('@/features/profile/PublicProfilePage'))
 const MyTontinesPage = lazy(() => import('@/features/tontines/MyTontinesPage'))
 const CreateTontinePage = lazy(() => import('@/features/tontines/CreateTontinePage'))
 const TontineDetailPage = lazy(() => import('@/features/tontines/TontineDetailPage'))
@@ -223,6 +224,7 @@ function AuthenticatedApp() {
           <Route path="/profile/payment-methods" element={<PaymentMethodsPage />} />
           <Route path="/profile/security" element={<SecurityPage />} />
           <Route path="/profile/notifications" element={<NotificationSettingsPage />} />
+          <Route path="/members/:userId" element={<PublicProfilePage />} />
           <Route path="/ndjoka-ai" element={<NdjokaAIPage />} />
           <Route path="/frais" element={<FeesPage />} />
           {LEGAL_ROUTES.map((route) => (

@@ -41,16 +41,16 @@ export const contributionStatusLabels: Record<Contribution['effective_status'], 
   late: 'En retard',
 }
 
-export type CategoryMeta = { label: string; icon: LucideIcon; chip: string; tile: string; image: string }
+export type CategoryMeta = { label: string; icon: LucideIcon; chip: string; tile: string; image: string; gradient: string }
 
 export const CATEGORY_META: Record<TontineCategory, CategoryMeta> = {
-  business: { label: 'Business', icon: Briefcase, chip: 'bg-blue-100 text-blue-700', tile: 'bg-blue-50 text-blue-600 border-blue-200', image: 'https://images.unsplash.com/photo-1548782033-3ac3a62ece8d?auto=format&fit=crop&w=1200&q=80' },
-  family: { label: 'Famille', icon: Users, chip: 'bg-rose-100 text-rose-700', tile: 'bg-rose-50 text-rose-600 border-rose-200', image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80' },
-  travel: { label: 'Voyage', icon: Plane, chip: 'bg-sky-100 text-sky-700', tile: 'bg-sky-50 text-sky-600 border-sky-200', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80' },
-  solidarity: { label: 'Solidarité', icon: Heart, chip: 'bg-orange-100 text-orange-700', tile: 'bg-orange-50 text-orange-600 border-orange-200', image: 'https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?auto=format&fit=crop&w=1200&q=80' },
-  housing: { label: 'Immobilier', icon: Home, chip: 'bg-emerald-100 text-emerald-700', tile: 'bg-emerald-50 text-emerald-600 border-emerald-200', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80' },
-  education: { label: 'Éducation', icon: GraduationCap, chip: 'bg-purple-100 text-purple-700', tile: 'bg-purple-50 text-purple-600 border-purple-200', image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80' },
-  other: { label: 'Autre', icon: Star, chip: 'bg-slate-100 text-slate-600', tile: 'bg-slate-50 text-slate-600 border-slate-200', image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80' },
+  business: { label: 'Business', icon: Briefcase, chip: 'bg-blue-100 text-blue-700', tile: 'bg-blue-50 text-blue-600 border-blue-200', image: 'https://images.unsplash.com/photo-1548782033-3ac3a62ece8d?auto=format&fit=crop&w=1200&q=80', gradient: 'from-blue-600 to-indigo-700' },
+  family: { label: 'Famille', icon: Users, chip: 'bg-rose-100 text-rose-700', tile: 'bg-rose-50 text-rose-600 border-rose-200', image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80', gradient: 'from-rose-500 to-pink-700' },
+  travel: { label: 'Voyage', icon: Plane, chip: 'bg-sky-100 text-sky-700', tile: 'bg-sky-50 text-sky-600 border-sky-200', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80', gradient: 'from-sky-500 to-cyan-700' },
+  solidarity: { label: 'Solidarité', icon: Heart, chip: 'bg-orange-100 text-orange-700', tile: 'bg-orange-50 text-orange-600 border-orange-200', image: 'https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?auto=format&fit=crop&w=1200&q=80', gradient: 'from-orange-500 to-amber-700' },
+  housing: { label: 'Immobilier', icon: Home, chip: 'bg-emerald-100 text-emerald-700', tile: 'bg-emerald-50 text-emerald-600 border-emerald-200', image: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80', gradient: 'from-emerald-600 to-teal-700' },
+  education: { label: 'Éducation', icon: GraduationCap, chip: 'bg-purple-100 text-purple-700', tile: 'bg-purple-50 text-purple-600 border-purple-200', image: 'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?auto=format&fit=crop&w=1200&q=80', gradient: 'from-purple-600 to-violet-800' },
+  other: { label: 'Autre', icon: Star, chip: 'bg-slate-100 text-slate-600', tile: 'bg-slate-50 text-slate-600 border-slate-200', image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80', gradient: 'from-slate-600 to-slate-800' },
 }
 
 export const CATEGORY_ORDER: TontineCategory[] = ['business', 'family', 'travel', 'solidarity', 'housing', 'education', 'other']

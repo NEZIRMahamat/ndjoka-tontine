@@ -11,6 +11,7 @@ from app.modules.memberships.routes import router as memberships_router
 from app.modules.notifications.routes import router as notifications_router
 from app.modules.payment_methods.routes import router as payment_methods_router
 from app.modules.payouts.routes import router as payouts_router
+from app.modules.profiles.routes import public_router as public_profiles_router
 from app.modules.profiles.routes import router as profiles_router
 from app.modules.tontines.routes import router as tontines_router
 
@@ -18,6 +19,7 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(me.router)
 api_router.include_router(profiles_router)
+api_router.include_router(public_profiles_router)
 api_router.include_router(payment_methods_router)
 api_router.include_router(fees_router)
 api_router.include_router(admin_users.router)

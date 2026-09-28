@@ -45,3 +45,11 @@ existante et score suffisant. Elle est tracée dans l'audit
 
 Erreurs d'adhésion : `404` tontine introuvable ou privée, `403` score
 insuffisant, `409` déjà membre, tontine complète ou non active.
+
+## Membres visibles avant adhésion
+
+`GET /api/v1/discovery/tontines/{id}/members` liste les membres actifs d'une
+tontine ouverte avec leur nom affiché, leur ville, leur rôle, leur ancienneté,
+leur position dans l'ordre des tours et leur score de fiabilité. Un futur
+adhérent sait ainsi avec qui il s'engage ; aucune donnée de contact ni
+financière n'est exposée.

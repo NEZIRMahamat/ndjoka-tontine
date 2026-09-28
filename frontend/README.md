@@ -64,7 +64,7 @@ src/
 | `tontines` | Mes tontines, création guidée en quatre étapes avec simulateur de frais, fiche (tours, membres, lancement), détail d'un tour (déclaration et confirmation des cotisations), espace de gestion (membres, invitations, cycles, versements) |
 | `payments` | Portefeuille, moyens de paiement, historique filtrable et détail des transactions, confirmation de réception des levées |
 | `ai` | Conversation Ndjoka AI et cartes de tontines recommandées |
-| `profile` | Profil, informations personnelles, profil d'épargnant et score, moyens de paiement, sécurité, notifications |
+| `profile` | Profil, informations personnelles, profil d'épargnant et score, moyens de paiement, sécurité, notifications, fiche publique d'un autre membre (`/members/:userId`) |
 | `fees` | Barème de commission, simulateur et fonds de solidarité |
 | `legal` | CGU, politique de confidentialité, à propos, équipe (rendu Markdown depuis `src/content/legal`) |
 | `admin` | Administration des utilisateurs (rôles `support` et `platform_admin`) |

@@ -50,3 +50,12 @@ prises en compte. Les constantes sont centralisées en tête de
 | `PUT` | `/api/v1/me/saver-profile` | Création ou remplacement |
 | `DELETE` | `/api/v1/me/saver-profile` | Suppression |
 | `GET` | `/api/v1/me/reliability` | Score, palier et détail du calcul |
+
+## Fiche publique d'un membre
+
+`GET /api/v1/users/{user_id}/profile` renvoie ce qu'un autre membre peut voir :
+nom affiché, avatar, ville, ancienneté, score de fiabilité (avec son
+explication), nombre de tontines actives, cycles menés à terme, niveau
+d'expérience déclaré et tontines partagées avec le demandeur. Aucune donnée de
+contact, bancaire ou financière individuelle n'est exposée. La liste des
+membres d'une tontine inclut aussi le score de chacun.

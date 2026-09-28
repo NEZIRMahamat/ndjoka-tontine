@@ -125,10 +125,12 @@ uv run alembic revision --autogenerate -m "description"
 
 ## Données de démonstration
 
-`app/seed/demo.py` charge un jeu de données cohérent : 40 profils fictifs
-(`demo|…`), une tontine terminée, deux tontines privées en cours (retards,
-déclarations à confirmer, versements reçus), une tontine qui démarre dans trois
-jours et sept tontines ouvertes en recrutement. Le compte réel passé avec
+`app/seed/demo.py` charge un jeu de données cohérent : une soixantaine de
+profils fictifs (`demo|…`) aux comportements de paiement contrastés (fiables,
+irréguliers, défaillants avec un score sous 50), et une quarantaine de
+tontines de 2 à 12 membres couvrant les combinaisons catégorie × rythme ×
+ordre de passage × statut (recrutement, planifiée, active, terminée), dont
+quatre construites à la main autour du présentateur. Le compte réel passé avec
 `--presenter "auth0|xxxx:Nom"` est propriétaire, trésorier ou membre selon la
 tontine, avec profil d'épargnant, moyens de paiement et notifications.
 

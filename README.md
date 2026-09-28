@@ -20,7 +20,9 @@ et trace les opérations, mais n'exécute aucun paiement.
 - **Versements** : éligibilité, approbation, déclaration de paiement,
   confirmation de réception, contestation.
 - **Profil d'épargnant et score de fiabilité** : capacité, rythme, objectif ;
-  score calculé à partir de l'historique réel des cotisations.
+  score calculé à partir de l'historique réel des cotisations, affiché à côté
+  de chaque membre et sur une fiche publique consultable (sans données
+  personnelles ni financières).
 - **Explorer** : tontines ouvertes classées par affinité avec le profil, et
   adhésion directe selon le score exigé par l'organisateur.
 - **Ndjoka AI** : assistant conversationnel (Groq) qui répond à partir des
@@ -38,8 +40,8 @@ et trace les opérations, mais n'exécute aucun paiement.
 
 ## Données de démonstration
 
-Un jeu de données réaliste (profils fictifs, tontines privées en cours,
-tontines ouvertes en recrutement, tontine terminée) accompagne la démo. Le
+Un jeu de données réaliste (une soixantaine de profils aux scores variés,
+une quarantaine de tontines de 2 à 12 membres à tous les stades) accompagne la démo. Le
 compte réel du présentateur est placé au cœur du jeu de données.
 
 ```bash

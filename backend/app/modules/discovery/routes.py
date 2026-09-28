@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db_session
 from app.modules.cycles.enums import CycleFrequency
 from app.modules.discovery import services
-from app.modules.discovery.schemas import DiscoveredTontine, DiscoveryList
+from app.modules.discovery.schemas import (
+    DiscoveredMemberList,
+    DiscoveredTontine,
+    DiscoveryList,
+)
 from app.modules.memberships.schemas import MembershipRead
 from app.modules.memberships.services import MembershipError
 from app.modules.users.dependencies import get_current_active_user
@@ -85,3 +89,15 @@ async def read_tontine(
     session: Session, actor: Actor, tontine_id: UUID
 ) -> DiscoveredTontine:
     return await services.get_discoverable_tontine(session, actor, tontine_id)
+
+
+@router.get(
+    "/tontines/{tontine_id}/members",
+    response_model=DiscoveredMemberList,
+    summary="Voir les membres d'une tontine ouverte avant d'adhérer",
+    responses={404: {"description": "Tontine introuvable ou non ouverte"}},
+)
+async def read_members(
+    session: Session, actor: Actor, tontine_id: UUID
+) -> DiscoveredMemberList:
+    return await services.list_discoverable_members(session, actor, tontine_id)

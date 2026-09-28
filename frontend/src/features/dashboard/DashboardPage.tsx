@@ -205,7 +205,7 @@ export default function DashboardPage() {
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Bonjour, {firstName} 👋</h1>
-          <p className="text-slate-500">Voici un aperçu de vos activités d'épargne.</p>
+          <p className="text-slate-500">Voici un aperçu de vos tontines et de vos cotisations.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => navigate('/explore')} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 transition-colors hover:bg-slate-50">
@@ -226,7 +226,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <StatCard
-            title="Épargne totale"
+            title="Total cotisé"
             value={formatCurrencyAmount(stats.totalSaved, currency)}
             subtext={stats.thisMonth > 0 ? `+${formatCurrencyAmount(stats.thisMonth, currency)} ce mois-ci` : 'Cotisations confirmées cumulées'}
             positive={stats.thisMonth > 0}
@@ -253,7 +253,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm lg:col-span-2">
           <div className="mb-6 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-slate-800">Évolution de l'épargne</h3>
+            <h3 className="text-lg font-bold text-slate-800">Évolution des cotisations</h3>
             <span className="rounded-lg bg-slate-50 px-3 py-1 text-sm text-slate-600">7 derniers mois</span>
           </div>
           {data ? <SparklineChart chartData={chartData} currency={currency} /> : <SkeletonBlock className="h-52" />}

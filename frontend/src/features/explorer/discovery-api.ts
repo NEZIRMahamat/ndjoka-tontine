@@ -140,3 +140,31 @@ export async function joinTontine(accessToken: string, tontineId: string): Promi
     method: 'POST',
   })
 }
+
+
+export type DiscoveredMember = {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+  city: string | null
+  role: 'owner' | 'manager' | 'treasurer' | 'member'
+  joined_at: string
+  member_since: string
+  reliability_score: string
+  reliability_band: string
+  reliability_provisional: boolean
+  turn_position: number | null
+}
+
+function isDiscoveredMember(value: unknown): value is DiscoveredMember {
+  return isRecord(value) && typeof value.user_id === 'string' && typeof value.role === 'string' &&
+    typeof value.reliability_score === 'string' && typeof value.reliability_provisional === 'boolean'
+}
+
+export async function getDiscoverableMembers(accessToken: string, tontineId: string, signal?: AbortSignal): Promise<DiscoveredMember[]> {
+  const payload = await apiRequest(accessToken, `/api/v1/discovery/tontines/${encodeURIComponent(tontineId)}/members`, { signal })
+  if (!isRecord(payload) || !Array.isArray(payload.items) || !payload.items.every(isDiscoveredMember)) {
+    throw new Error('La liste des membres reçue est invalide')
+  }
+  return payload.items
+}
