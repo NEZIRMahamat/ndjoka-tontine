@@ -1,4 +1,5 @@
 import calendar
+import secrets
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -14,7 +15,7 @@ from app.modules.cycles.schemas import CycleCreate, CycleUpdate, TurnOrderUpdate
 from app.modules.memberships.enums import MembershipRole
 from app.modules.memberships.models import Membership
 from app.modules.notifications.service import enqueue_event, tontine_recipients
-from app.modules.tontines.enums import TontineStatus
+from app.modules.tontines.enums import TontineStatus, TurnOrderMode
 from app.modules.tontines.models import Tontine
 from app.modules.users.models import User
 
@@ -192,6 +193,46 @@ async def replace_turns(
     return cycle
 
 
+def order_beneficiaries(
+    memberships: list[Membership], order_mode: TurnOrderMode
+) -> list[Membership]:
+    """Appliquer la règle d'ordre de passage choisie à la création du groupe.
+
+    - inscription : ordre d'arrivée dans le groupe ;
+    - tirage au sort : mélange aléatoire cryptographiquement sûr ;
+    - vote : l'ordre d'inscription sert de proposition, ajustable ensuite par
+      le responsable après consultation du groupe.
+    """
+    ordered = list(memberships)
+    if order_mode == TurnOrderMode.LOTTERY:
+        secrets.SystemRandom().shuffle(ordered)
+    return ordered
+
+
+async def _generate_turns_locked(
+    session: AsyncSession, cycle: Cycle, membership: Membership
+) -> list[Membership]:
+    tontine = await session.get(Tontine, cycle.tontine_id)
+    active = await repositories.active_memberships(session, cycle.tontine_id)
+    if not active:
+        raise CycleError("Aucun membre actif pour générer le calendrier", 409)
+    ordered = order_beneficiaries(active, tontine.order_mode)
+    await replace_turns(session, cycle, ordered)
+    await record(
+        session,
+        event_name="cycle.turns_generated",
+        actor_user_id=membership.user_id,
+        tontine_id=cycle.tontine_id,
+        resource_type="cycle",
+        resource_id=cycle.id,
+        changes={
+            "turn_count": {"to": len(ordered)},
+            "order_mode": {"to": tontine.order_mode.value},
+        },
+    )
+    return ordered
+
+
 async def generate_turns(
     session: AsyncSession, tontine_id: UUID, cycle_id: UUID, membership: Membership
 ) -> Cycle:
@@ -199,19 +240,7 @@ async def generate_turns(
     try:
         cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
         require_draft(cycle)
-        active = await repositories.active_memberships(session, tontine_id)
-        if not active:
-            raise CycleError("Aucun membre actif pour générer le calendrier", 409)
-        await replace_turns(session, cycle, active)
-        await record(
-            session,
-            event_name="cycle.turns_generated",
-            actor_user_id=membership.user_id,
-            tontine_id=tontine_id,
-            resource_type="cycle",
-            resource_id=cycle.id,
-            changes={"turn_count": {"to": len(active)}},
-        )
+        await _generate_turns_locked(session, cycle, membership)
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)
     except Exception:
@@ -298,6 +327,48 @@ async def schedule_cycle(
         raise
 
 
+async def _activate_locked(
+    session: AsyncSession, tontine: Tontine, cycle: Cycle, membership: Membership
+) -> None:
+    """Activer un cycle planifié ; l'appelant détient les verrous et commite."""
+    if cycle.status != CycleStatus.SCHEDULED:
+        raise CycleError("Seul un cycle planifié peut être activé", 409)
+    await ensure_complete_order(session, cycle)
+    if await repositories.has_other_active_cycle(session, tontine.id, cycle.id):
+        raise CycleError("Un autre cycle est déjà actif pour cette tontine", 409)
+    old_status = cycle.status
+    cycle.status = CycleStatus.ACTIVE
+    cycle.activated_at = datetime.now(UTC)
+    if tontine.status == TontineStatus.DRAFT:
+        tontine.status = TontineStatus.ACTIVE
+    from app.modules.contributions.services import generate_for_cycle
+
+    await generate_for_cycle(session, cycle)
+    from app.modules.payouts.services import generate_for_cycle as generate_payouts
+
+    await generate_payouts(session, cycle)
+    await record(
+        session,
+        event_name="cycle.activated",
+        actor_user_id=membership.user_id,
+        tontine_id=tontine.id,
+        resource_type="cycle",
+        resource_id=cycle.id,
+        changes={"status": change(old_status, cycle.status)},
+    )
+    await enqueue_event(
+        session,
+        event_name="cycle.activated",
+        aggregate_type="cycle",
+        aggregate_id=cycle.id,
+        tontine_id=tontine.id,
+        recipients=await tontine_recipients(session, tontine.id),
+        template_context={"tontine_name": tontine.name},
+        action_path=f"/tontines/{tontine.id}/cycles/{cycle.id}",
+        deduplication_key=f"cycle:{cycle.id}:activated",
+    )
+
+
 async def activate_cycle(
     session: AsyncSession, tontine_id: UUID, cycle_id: UUID, membership: Membership
 ) -> Cycle:
@@ -307,41 +378,64 @@ async def activate_cycle(
         if tontine is None:
             raise CycleError("Tontine introuvable", 404)
         cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
-        if cycle.status != CycleStatus.SCHEDULED:
-            raise CycleError("Seul un cycle planifié peut être activé", 409)
-        await ensure_complete_order(session, cycle)
-        if await repositories.has_other_active_cycle(session, tontine_id, cycle_id):
-            raise CycleError("Un autre cycle est déjà actif pour cette tontine", 409)
-        old_status = cycle.status
-        cycle.status = CycleStatus.ACTIVE
-        cycle.activated_at = datetime.now(UTC)
-        if tontine.status == TontineStatus.DRAFT:
-            tontine.status = TontineStatus.ACTIVE
-        from app.modules.contributions.services import generate_for_cycle
+        await _activate_locked(session, tontine, cycle, membership)
+        await session.commit()
+        return await get_cycle(session, tontine_id, cycle_id)
+    except IntegrityError as exc:
+        await session.rollback()
+        raise CycleError(
+            "Un autre cycle est déjà actif pour cette tontine", 409
+        ) from exc
+    except Exception:
+        if session.in_transaction():
+            await session.rollback()
+        raise
 
-        await generate_for_cycle(session, cycle)
-        from app.modules.payouts.services import generate_for_cycle as generate_payouts
 
-        await generate_payouts(session, cycle)
+async def launch_cycle(
+    session: AsyncSession, tontine_id: UUID, cycle_id: UUID, membership: Membership
+) -> Cycle:
+    """Lancer une tontine en une étape : ordre des tours, planification, activation.
+
+    Le calendrier est généré selon la règle d'ordre du groupe uniquement s'il
+    n'a pas déjà été préparé (ou ajusté à la main) par le responsable.
+    """
+    require_role(membership, MembershipRole.OWNER, MembershipRole.MANAGER)
+    try:
+        tontine = await repositories.lock_tontine(session, tontine_id)
+        if tontine is None:
+            raise CycleError("Tontine introuvable", 404)
+        if tontine.status == TontineStatus.ARCHIVED:
+            raise CycleError("Une tontine archivée est en lecture seule", 409)
+        cycle = await get_cycle(session, tontine_id, cycle_id, lock=True)
+        if cycle.status not in {CycleStatus.DRAFT, CycleStatus.SCHEDULED}:
+            raise CycleError("Ce cycle a déjà été lancé", 409)
+        active = await repositories.active_memberships(session, tontine_id)
+        if len(active) < 2:
+            raise CycleError(
+                "Au moins deux membres actifs sont nécessaires pour lancer la tontine",
+                409,
+            )
+        if cycle.status == CycleStatus.DRAFT:
+            prepared = {turn.beneficiary_membership_id for turn in cycle.turns}
+            if prepared != {item.id for item in active}:
+                await _generate_turns_locked(session, cycle, membership)
+                await session.refresh(cycle, attribute_names=["turns"])
+            cycle.status = CycleStatus.SCHEDULED
+            await session.flush()
+        await _activate_locked(session, tontine, cycle, membership)
         await record(
             session,
-            event_name="cycle.activated",
+            event_name="cycle.launched",
             actor_user_id=membership.user_id,
             tontine_id=tontine_id,
             resource_type="cycle",
             resource_id=cycle.id,
-            changes={"status": change(old_status, cycle.status)},
-        )
-        await enqueue_event(
-            session,
-            event_name="cycle.activated",
-            aggregate_type="cycle",
-            aggregate_id=cycle.id,
-            tontine_id=tontine_id,
-            recipients=await tontine_recipients(session, tontine_id),
-            template_context={"tontine_name": tontine.name},
-            action_path=f"/tontines/{tontine_id}/cycles/{cycle.id}",
-            deduplication_key=f"cycle:{cycle.id}:activated",
+            changes={
+                "status": {"to": cycle.status.value},
+                "turn_count": {"to": len(cycle.turns)},
+                "order_mode": {"to": tontine.order_mode.value},
+            },
         )
         await session.commit()
         return await get_cycle(session, tontine_id, cycle_id)

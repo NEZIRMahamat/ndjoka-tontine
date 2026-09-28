@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.agent_guardrail import ModerationError, check_moderation
 from app.ai.agent_ndjoka import AgentError, run_ndjoka_agent
-from app.ai.schemas import ChatRequest, ChatResponse
+from app.ai.schemas import ChatRequest, ChatResponse, RecommendedTontine
 from app.core.config import get_ai_settings
 from app.db.session import get_db_session
 from app.modules.users.dependencies import get_current_active_user
@@ -40,6 +40,7 @@ FALLBACK_ERROR = (
 @router.post(
     "/chat",
     response_model=ChatResponse,
+    response_model_exclude_none=True,
     responses={
         401: {"description": "Access Token absent, invalide ou expiré"},
         403: {"description": "Compte suspendu ou désactivé"},
@@ -70,14 +71,22 @@ async def chat_with_agent(
         return ChatResponse(reply=moderation.get("refusal_message") or FALLBACK_REFUSAL)
 
     try:
-        reply = await run_ndjoka_agent(
+        outcome = await run_ndjoka_agent(
             session, actor, [message.model_dump() for message in history]
         )
     except AgentError as error:
         logger.warning("Ndjoka AI indisponible pendant la réponse")
         raise HTTPException(status_code=503, detail=FALLBACK_ERROR) from error
 
+    reply = outcome if isinstance(outcome, str) else outcome.reply
+    recommendations = [] if isinstance(outcome, str) else outcome.recommendations
     if not reply:
         logger.error("Ndjoka AI a retourné une réponse vide")
         raise HTTPException(status_code=503, detail=FALLBACK_ERROR)
-    return ChatResponse(reply=reply)
+    return ChatResponse(
+        reply=reply,
+        recommendations=[
+            RecommendedTontine.model_validate(card) for card in recommendations
+        ]
+        or None,
+    )

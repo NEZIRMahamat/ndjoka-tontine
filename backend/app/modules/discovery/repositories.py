@@ -5,12 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.cycles.enums import CycleFrequency, CycleStatus
 from app.modules.cycles.models import Cycle
-from app.modules.memberships.enums import MembershipStatus
+from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.tontines.enums import TontineStatus
 from app.modules.tontines.models import Tontine
+from app.modules.users.models import User
 
 OPEN_CYCLE_STATUSES = (CycleStatus.DRAFT, CycleStatus.SCHEDULED, CycleStatus.ACTIVE)
+# Une tontine ouverte se découvre dès sa phase de recrutement (brouillon) et
+# tant qu'elle n'est pas archivée.
+OPEN_TONTINE_STATUSES = (TontineStatus.DRAFT, TontineStatus.ACTIVE)
 
 
 def _member_count_subquery():
@@ -56,12 +60,24 @@ def _base_query(
         .exists()
     )
     reference_cycle = _reference_cycle_subquery()
+    owner_id = (
+        select(Membership.user_id)
+        .where(
+            Membership.tontine_id == Tontine.id,
+            Membership.role == MembershipRole.OWNER,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+        .limit(1)
+        .correlate(Tontine)
+        .scalar_subquery()
+    )
 
     query = (
-        select(Tontine, member_count.label("member_count"), Cycle)
+        select(Tontine, member_count.label("member_count"), Cycle, User)
         .outerjoin(Cycle, Cycle.id == reference_cycle)
+        .outerjoin(User, User.id == owner_id)
         .where(
-            Tontine.status == TontineStatus.ACTIVE,
+            Tontine.status.in_(OPEN_TONTINE_STATUSES),
             Tontine.is_discoverable.is_(True),
             ~already_member,
             or_(Tontine.max_members.is_(None), member_count < Tontine.max_members),
@@ -86,21 +102,21 @@ async def list_discoverable_tontines(
     *,
     search: str | None = None,
     frequency: CycleFrequency | None = None,
-) -> list[tuple[Tontine, int, Cycle | None]]:
+) -> list[tuple[Tontine, int, Cycle | None, User | None]]:
     """Lister les tontines ouvertes que l'utilisateur n'a pas encore rejointes."""
     query = _base_query(user_id, search, frequency).order_by(
         Tontine.created_at.desc(), Tontine.id.desc()
     )
     rows = (await session.execute(query)).all()
-    return [(row[0], int(row[1] or 0), row[2]) for row in rows]
+    return [(row[0], int(row[1] or 0), row[2], row[3]) for row in rows]
 
 
 async def get_discoverable_tontine(
     session: AsyncSession, user_id: UUID, tontine_id: UUID
-) -> tuple[Tontine, int, Cycle | None] | None:
+) -> tuple[Tontine, int, Cycle | None, User | None] | None:
     row = (
         await session.execute(
             _base_query(user_id, None).where(Tontine.id == tontine_id)
         )
     ).first()
-    return (row[0], int(row[1] or 0), row[2]) if row else None
+    return (row[0], int(row[1] or 0), row[2], row[3]) if row else None

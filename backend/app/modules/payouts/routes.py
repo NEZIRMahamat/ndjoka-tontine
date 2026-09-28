@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.modules.cycles.models import Cycle
 from app.modules.cycles.services import CycleError, get_cycle
 from app.modules.memberships.dependencies import CurrentMembership
 from app.modules.payouts import repositories, services
@@ -73,12 +74,15 @@ async def list_cycle(
     offset: Offset = 0,
     status: PayoutStatus | None = None,
 ):
-    await get_cycle(session, tontine_id, cycle_id)
+    cycle = await get_cycle(session, tontine_id, cycle_id)
     items, total = await repositories.list_items(
         session, cycle_id=cycle_id, status=status, limit=limit, offset=offset
     )
     return PayoutList(
-        items=[services.read_item(item, membership) for item in items],
+        items=[
+            services.read_item(item, membership, cycle.contribution_amount)
+            for item in items
+        ],
         total=total,
         limit=limit,
         offset=offset,
@@ -122,7 +126,12 @@ async def list_mine(
     results = []
     for item in items:
         membership = await services.membership_for(session, item.tontine_id, actor)
-        results.append(services.read_item(item, membership))
+        cycle = await session.get(Cycle, item.cycle_id)
+        results.append(
+            services.read_item(
+                item, membership, cycle.contribution_amount if cycle else None
+            )
+        )
     return PayoutList(items=results, total=total, limit=limit, offset=offset)
 
 
@@ -133,8 +142,8 @@ async def list_mine(
     summary="Consulter un versement",
 )
 async def read(payout_id: UUID, session: Session, actor: Actor):
-    item, membership, _ = await services.get_payout(session, payout_id, actor)
-    return services.read_item(item, membership)
+    item, membership, cycle = await services.get_payout(session, payout_id, actor)
+    return services.read_item(item, membership, cycle.contribution_amount)
 
 
 @router.post(

@@ -175,6 +175,19 @@ Règles :
 - appliquer les migrations du code qui va être déployé, pas d'une autre
   branche.
 
+### Réinitialiser la base et charger la démonstration
+
+Depuis `backend/`, avec `backend/.env.prod` renseigné :
+
+```bash
+uv run python -m app.seed.reset --env prod --yes --presenter "auth0|xxxx:Nom affiché"
+```
+
+Le script sauvegarde d'abord la base (`backend/backups/`, `pg_dump` ou export
+JSON si les versions diffèrent), recrée le schéma `public`, applique toutes
+les migrations puis charge le jeu de démonstration. Créer un snapshot RDS au
+préalable pour une base contenant des données réelles.
+
 ### Désigner le premier administrateur
 
 1. Se connecter une fois sur `https://app.ndjoka-tontine.com` pour créer le

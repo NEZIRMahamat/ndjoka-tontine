@@ -48,22 +48,31 @@ figurer dans **Allowed Callback URLs**, **Allowed Logout URLs** et
 src/
   app/          routage, layout, fournisseur Auth0, utilisateur courant
   components/
-    layout/     barre latérale et barre supérieure
+    brand/      logo Ndjoka
+    layout/     coque de l'application (barre latérale, en-tête, pied de page, navigation mobile)
     shared/     composants transverses (confirmation, états vides, badges)
     ui/         primitives shadcn/ui
+  content/      documents Markdown (CGU, confidentialité, à propos, équipe)
   features/     un dossier par écran, avec sa page et son client API
   lib/          client HTTP commun et utilitaires
 ```
 
 | Feature | Écran |
 | --- | --- |
-| `dashboard` | Accueil et activité mensuelle des cotisations confirmées |
-| `explorer` | Tontines ouvertes recommandées, fiches détaillées, adhésion et conseils |
-| `tontines` | Mes tontines, création guidée, membres, cycles, tours, cotisations et versements |
-| `payments` | Échéances, historique paginé et détails des cotisations et versements déclarés, suivi des réceptions |
-| `ai` | Conversation Ndjoka AI et recommandations fondées sur le profil réel |
-| `profile` | Compte, profil d'épargnant et score de fiabilité |
+| `dashboard` | Accueil : épargne, prochaine levée, score, évolution mensuelle, tontines en cours |
+| `explorer` | Tontines ouvertes filtrables (catégorie, rythme, montant), fiche détaillée avec affinité et adhésion, conseils |
+| `tontines` | Mes tontines, création guidée en quatre étapes avec simulateur de frais, fiche (tours, membres, lancement), détail d'un tour (déclaration et confirmation des cotisations), espace de gestion (membres, invitations, cycles, versements) |
+| `payments` | Portefeuille, moyens de paiement, historique filtrable et détail des transactions, confirmation de réception des levées |
+| `ai` | Conversation Ndjoka AI et cartes de tontines recommandées |
+| `profile` | Profil, informations personnelles, profil d'épargnant et score, moyens de paiement, sécurité, notifications |
+| `fees` | Barème de commission, simulateur et fonds de solidarité |
+| `legal` | CGU, politique de confidentialité, à propos, équipe (rendu Markdown depuis `src/content/legal`) |
 | `admin` | Administration des utilisateurs (rôles `support` et `platform_admin`) |
+
+Le layout (`components/layout/AppShell.tsx`) reprend le design Figma : barre
+latérale repliable, en-tête avec notifications et menu du compte, pied de page
+et navigation mobile. Les pages institutionnelles et le barème des frais sont
+aussi accessibles sans connexion.
 
 Chaque client API valide les réponses avec des type guards avant de les
 utiliser. Les requêtes passent par `apiRequest` (`src/lib/http.ts`).

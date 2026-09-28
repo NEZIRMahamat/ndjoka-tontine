@@ -186,6 +186,19 @@ async def activate(
 
 
 @router.post(
+    "/tontines/{tontine_id}/cycles/{cycle_id}/launch",
+    response_model=CycleRead,
+    summary="Lancer la tontine : ordre des tours, planification et activation",
+)
+async def launch(
+    tontine_id: UUID, cycle_id: UUID, session: Session, membership: CurrentMembership
+) -> CycleRead:
+    return CycleRead.model_validate(
+        await services.launch_cycle(session, tontine_id, cycle_id, membership)
+    )
+
+
+@router.post(
     "/tontines/{tontine_id}/cycles/{cycle_id}/complete",
     response_model=CycleRead,
     summary="Terminer un cycle actif",

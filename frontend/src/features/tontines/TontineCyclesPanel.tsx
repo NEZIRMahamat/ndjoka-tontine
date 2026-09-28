@@ -715,7 +715,7 @@ export function TontineCyclesPanel({
                             </span>
                             <span className="flex items-center gap-1">
                               <Button asChild size="sm" variant="ghost" className="text-primary">
-                                <Link to={`/tontines/${tontineId}/cycles/${cycle.id}/turns/${turn.id}`}>
+                                <Link to={`/tontines/${tontineId}/tour/${turn.id}`}>
                                   Voir le tour
                                 </Link>
                               </Button>

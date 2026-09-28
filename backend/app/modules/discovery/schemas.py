@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.modules.cycles.enums import CycleFrequency
+from app.modules.cycles.enums import CycleFrequency, CycleStatus
+from app.modules.tontines.enums import TontineCategory, TontineStatus, TurnOrderMode
 
 
 class AffinityReason(BaseModel):
@@ -30,6 +31,18 @@ class DiscoveredTontine(BaseModel):
     monthly_equivalent: Decimal | None
     min_reliability_score: Decimal | None
     created_at: datetime
+    status: TontineStatus
+    category: TontineCategory
+    goal: str | None
+    city: str | None
+    order_mode: TurnOrderMode
+    rules: str | None
+    late_penalty_enabled: bool
+    cover_image_url: str | None
+    cycle_status: CycleStatus | None
+    start_date: date | None
+    organizer_name: str | None
+    organizer_since: datetime | None
     affinity_score: Decimal
     is_eligible: bool
     ineligibility_reason: str | None

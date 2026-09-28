@@ -18,6 +18,10 @@ REQUIRED_USER_COLUMNS = {
     "created_at",
     "updated_at",
     "deactivated_at",
+    "phone",
+    "address",
+    "city",
+    "notification_preferences",
 }
 FORBIDDEN_USER_COLUMNS = {
     "hashed_password",
@@ -25,8 +29,6 @@ FORBIDDEN_USER_COLUMNS = {
     "totp_secret",
     "refresh_token",
     "access_token",
-    "phone",
-    "phone_number",
     "kyc_status",
     "bank_account",
 }

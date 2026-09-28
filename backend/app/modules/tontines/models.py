@@ -20,11 +20,22 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.modules.tontines.enums import TontineStatus
+from app.modules.tontines.enums import TontineCategory, TontineStatus, TurnOrderMode
+
+
+def enum_type(enum: type, length: int) -> Enum:
+    return Enum(
+        enum,
+        native_enum=False,
+        create_constraint=False,
+        validate_strings=True,
+        values_callable=lambda values: [value.value for value in values],
+        length=length,
+    )
 
 
 class Tontine(Base):
-    """Projet de tontine appartenant à son créateur pendant le Sprint 2."""
+    """Groupe de tontine : identité, règles du groupe et visibilité."""
 
     __tablename__ = "tontines"
     __table_args__ = (
@@ -42,6 +53,14 @@ class Tontine(Base):
             "min_reliability_score IS NULL "
             "OR (min_reliability_score >= 0 AND min_reliability_score <= 1)",
             name="min_reliability_range",
+        ),
+        CheckConstraint(
+            "category IN ('business', 'family', 'travel', 'solidarity', "
+            "'housing', 'education', 'other')",
+            name="category",
+        ),
+        CheckConstraint(
+            "order_mode IN ('lottery', 'registration', 'vote')", name="order_mode"
         ),
         Index(
             "ix_tontines_creator_created_id", "created_by_user_id", "created_at", "id"
@@ -70,15 +89,27 @@ class Tontine(Base):
     min_reliability_score: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 3), nullable=True
     )
+    category: Mapped[TontineCategory] = mapped_column(
+        enum_type(TontineCategory, 20),
+        nullable=False,
+        default=TontineCategory.OTHER,
+        server_default=text("'other'"),
+    )
+    goal: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    order_mode: Mapped[TurnOrderMode] = mapped_column(
+        enum_type(TurnOrderMode, 20),
+        nullable=False,
+        default=TurnOrderMode.REGISTRATION,
+        server_default=text("'registration'"),
+    )
+    rules: Mapped[str | None] = mapped_column(Text, nullable=True)
+    late_penalty_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    cover_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     status: Mapped[TontineStatus] = mapped_column(
-        Enum(
-            TontineStatus,
-            native_enum=False,
-            create_constraint=False,
-            validate_strings=True,
-            values_callable=lambda values: [value.value for value in values],
-            length=20,
-        ),
+        enum_type(TontineStatus, 20),
         nullable=False,
         server_default=text("'draft'"),
     )

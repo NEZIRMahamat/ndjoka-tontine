@@ -81,7 +81,8 @@ async def list_cycle(
     offset: Annotated[int, Query(ge=0)] = 0,
     status: EffectiveContributionStatus | None = None,
 ) -> ContributionList:
-    services.require_financial_role(membership)
+    # Transparence du groupe : chaque membre actif voit qui a cotisé et quand.
+    del membership
     await cycle_services.get_cycle(session, tontine_id, cycle_id)
     items, total = await repositories.list_cycle_contributions(
         session,
@@ -107,7 +108,7 @@ async def list_cycle(
 async def cycle_summary(
     tontine_id: UUID, cycle_id: UUID, session: Session, membership: CurrentMembership
 ) -> ContributionSummary:
-    services.require_financial_role(membership)
+    del membership
     await cycle_services.get_cycle(session, tontine_id, cycle_id)
     return await services.summary(session, cycle_id)
 

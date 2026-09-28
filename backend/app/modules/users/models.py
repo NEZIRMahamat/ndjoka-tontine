@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, String, Uuid, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -71,6 +72,12 @@ class User(Base):
         nullable=False,
         default=DEFAULT_USER_TIMEZONE,
         server_default=text("'Europe/Paris'"),
+    )
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    notification_preferences: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     status: Mapped[UserStatus] = mapped_column(
         USER_STATUS_TYPE,

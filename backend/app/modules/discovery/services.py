@@ -43,8 +43,8 @@ async def discover_tontines(
     )
 
     items = [
-        _discovered(tontine, member_count, cycle, profile, reliability.score)
-        for tontine, member_count, cycle in rows
+        _discovered(tontine, member_count, cycle, owner, profile, reliability.score)
+        for tontine, member_count, cycle, owner in rows
     ]
 
     if eligible_only:
@@ -78,6 +78,7 @@ def _discovered(
     tontine: Tontine,
     member_count: int,
     cycle: Cycle | None,
+    owner: User | None,
     profile: SaverProfile | None,
     reliability_score: Decimal,
 ) -> DiscoveredTontine:
@@ -107,6 +108,18 @@ def _discovered(
         ),
         min_reliability_score=gate,
         created_at=tontine.created_at,
+        status=tontine.status,
+        category=tontine.category,
+        goal=tontine.goal,
+        city=tontine.city,
+        order_mode=tontine.order_mode,
+        rules=tontine.rules,
+        late_penalty_enabled=tontine.late_penalty_enabled,
+        cover_image_url=tontine.cover_image_url,
+        cycle_status=cycle.status if cycle else None,
+        start_date=cycle.start_date if cycle else None,
+        organizer_name=owner.display_name if owner else None,
+        organizer_since=owner.created_at if owner else None,
         affinity_score=affinity,
         is_eligible=eligible,
         ineligibility_reason=None
@@ -124,7 +137,7 @@ async def join_discoverable_tontine(
         tontine = await membership_repositories.lock_tontine(session, tontine_id)
         if tontine is None or not tontine.is_discoverable:
             raise MembershipError("Tontine introuvable ou non ouverte", 404)
-        if tontine.status != TontineStatus.ACTIVE:
+        if tontine.status not in {TontineStatus.DRAFT, TontineStatus.ACTIVE}:
             raise MembershipError("Cette tontine n'accepte pas d'adhésion", 409)
         if await membership_repositories.find_membership(
             session, tontine.id, actor.id, lock=True

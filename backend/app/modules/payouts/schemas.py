@@ -61,6 +61,10 @@ class PayoutRead(BaseModel):
     cancelled_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # Application du barème Ndjoka : frais déduits du pot versé au bénéficiaire.
+    platform_fee: Decimal | None = None
+    solidarity_fund_share: Decimal | None = None
+    net_amount: Decimal | None = None
     # Absent (not merely null) for ordinary members other than the beneficiary.
     approved_by_user_id: UUID | None = None
     declared_paid_by_user_id: UUID | None = None

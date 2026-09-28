@@ -23,11 +23,34 @@ et trace les opérations, mais n'exécute aucun paiement.
   score calculé à partir de l'historique réel des cotisations.
 - **Explorer** : tontines ouvertes classées par affinité avec le profil, et
   adhésion directe selon le score exigé par l'organisateur.
-- **Ndjoka AI** : assistant qui répond à partir des données de l'utilisateur,
-  en lecture seule.
+- **Ndjoka AI** : assistant conversationnel (Groq) qui répond à partir des
+  données de l'utilisateur, en lecture seule, et propose des tontines ouvertes.
+- **Modèle économique** : barème de commission dégressive (3 % / 2 % / 1 %,
+  plafond 10 €) déduit du pot versé au bénéficiaire, un sixième affecté au
+  fonds de solidarité ; simulateur et détail des frais dans l'application.
+- **Moyens de paiement et préférences** : déclaration de cartes, SEPA et
+  Mobile Money (référence masquée uniquement), préférences de notification.
+- **Pages institutionnelles** : CGU, politique de confidentialité, à propos,
+  équipe et barème des frais, accessibles avant connexion.
 - **Notifications** : notifications internes et e-mails transactionnels.
 - **Audit** : historique immuable des actions sensibles.
 - **Administration** : gestion des comptes, statuts et rôles globaux.
+
+## Données de démonstration
+
+Un jeu de données réaliste (profils fictifs, tontines privées en cours,
+tontines ouvertes en recrutement, tontine terminée) accompagne la démo. Le
+compte réel du présentateur est placé au cœur du jeu de données.
+
+```bash
+cd backend
+uv run python -m app.seed.reset --env dev --yes      # sauvegarde, schéma vide, migrations, démo
+uv run python -m app.seed.reset --env prod --yes --presenter "auth0|xxxx:Nom affiché"
+uv run python -m app.seed.demo --presenter "auth0|xxxx:Nom affiché"   # démo seule, base déjà migrée
+```
+
+Les sauvegardes sont écrites dans `backend/backups/` (ignoré par Git). Voir
+[backend/README.md](backend/README.md#données-de-démonstration).
 
 ## Architecture
 

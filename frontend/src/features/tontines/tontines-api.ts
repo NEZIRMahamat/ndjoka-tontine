@@ -1,6 +1,9 @@
 import { apiRequest, isRecord } from '@/lib/http'
+import { isCycle, type Cycle } from '@/features/tontines/cycles-api'
 
 export type TontineStatus = 'draft' | 'active' | 'archived'
+export type TontineCategory = 'business' | 'family' | 'travel' | 'solidarity' | 'housing' | 'education' | 'other'
+export type TurnOrderMode = 'lottery' | 'registration' | 'vote'
 export type MembershipRole = 'owner' | 'manager' | 'treasurer' | 'member'
 export type MembershipStatus = 'active' | 'left' | 'removed'
 export type InvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked'
@@ -18,11 +21,26 @@ export type Tontine = {
   archived_at: string | null
   is_discoverable: boolean
   min_reliability_score: string | null
+  category: TontineCategory
+  goal: string | null
+  city: string | null
+  order_mode: TurnOrderMode
+  rules: string | null
+  late_penalty_enabled: boolean
+  cover_image_url: string | null
 }
 export type TontineInput = Pick<
   Tontine,
-  'name' | 'description' | 'currency' | 'max_members' | 'is_discoverable' | 'min_reliability_score'
+  | 'name' | 'description' | 'currency' | 'max_members' | 'is_discoverable' | 'min_reliability_score'
+  | 'category' | 'goal' | 'city' | 'order_mode' | 'rules' | 'late_penalty_enabled' | 'cover_image_url'
 >
+export type TontineSetupInput = TontineInput & {
+  contribution_amount: string
+  frequency: 'weekly' | 'monthly'
+  start_date: string
+  timezone: string
+  beneficiary_contributes: boolean
+}
 export type TontinePage = { items: Tontine[]; total: number; limit: number; offset: number }
 
 export type Membership = {
@@ -63,7 +81,9 @@ function isTontine(value: unknown): value is Tontine {
     (value.archived_at === null || typeof value.archived_at === 'string') &&
     typeof value.is_discoverable === 'boolean' &&
     (value.min_reliability_score === null || typeof value.min_reliability_score === 'string') &&
-    ['draft', 'active', 'archived'].includes(String(value.status))
+    ['draft', 'active', 'archived'].includes(String(value.status)) &&
+    typeof value.category === 'string' && typeof value.order_mode === 'string' &&
+    typeof value.late_penalty_enabled === 'boolean'
 }
 
 function isMembership(value: unknown): value is Membership {
@@ -111,6 +131,14 @@ export async function createTontine(token: string, input: TontineInput): Promise
   const payload = await apiRequest(token, '/api/v1/tontines', { method: 'POST', body: JSON.stringify(input) })
   if (!isTontine(payload)) throw new Error('La tontine reçue est invalide')
   return payload
+}
+
+export async function setupTontine(token: string, input: TontineSetupInput): Promise<{ tontine: Tontine; cycle: Cycle }> {
+  const payload = await apiRequest(token, '/api/v1/tontines/setup', { method: 'POST', body: JSON.stringify(input) })
+  if (!isRecord(payload) || !isTontine(payload.tontine) || !isCycle(payload.cycle)) {
+    throw new Error('La création de la tontine a renvoyé une réponse invalide')
+  }
+  return { tontine: payload.tontine, cycle: payload.cycle }
 }
 
 export async function updateTontine(token: string, id: string, input: Partial<TontineInput>): Promise<Tontine> {

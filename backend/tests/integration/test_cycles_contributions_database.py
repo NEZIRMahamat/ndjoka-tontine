@@ -151,9 +151,10 @@ def test_cycle_and_contribution_http_lifecycle(test_database_url):
                 all_contributions = await client.get(contributions_path, headers=owner)
                 assert all_contributions.status_code == 200
                 assert all_contributions.json()["total"] == 4
-                assert (
-                    await client.get(contributions_path, headers=member)
-                ).status_code == 403
+                # Transparence du groupe : un membre voit l'état des cotisations.
+                member_view = await client.get(contributions_path, headers=member)
+                assert member_view.status_code == 200
+                assert member_view.json()["total"] == 4
                 assert (
                     await client.post(contributions_path + "/generate", headers=owner)
                 ).json()["obligations_total"] == 4

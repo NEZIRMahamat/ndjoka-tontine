@@ -7,8 +7,16 @@ from app.core.auth0 import get_current_token_payload
 from app.db.session import get_db_session
 from app.modules.users.dependencies import get_current_active_user
 from app.modules.users.models import User
-from app.modules.users.schemas import CurrentUserResponse, UserProfileUpdate
-from app.modules.users.services import deactivate_user, update_user_profile
+from app.modules.users.schemas import (
+    CurrentUserResponse,
+    NotificationPreferences,
+    UserProfileUpdate,
+)
+from app.modules.users.services import (
+    deactivate_user,
+    update_notification_preferences,
+    update_user_profile,
+)
 from app.schemas.auth import TokenPayload
 
 router = APIRouter(prefix="/me", tags=["authentication"])
@@ -30,6 +38,9 @@ def build_current_user_response(
         avatar_url=user.avatar_url,
         locale=user.locale,
         timezone=user.timezone,
+        phone=user.phone,
+        address=user.address,
+        city=user.city,
         status=user.status,
         global_role=user.global_role,
         created_at=user.created_at,
@@ -107,3 +118,38 @@ async def deactivate_current_user(
         token_payload,
         message="Compte Ndjoka désactivé",
     )
+
+
+@router.get(
+    "/notification-preferences",
+    response_model=NotificationPreferences,
+    summary="Consulter mes préférences de notification",
+)
+async def read_notification_preferences(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+) -> NotificationPreferences:
+    """Retourner les préférences enregistrées, complétées par les valeurs par défaut."""
+    return NotificationPreferences.model_validate(
+        {
+            key: value
+            for key, value in (current_user.notification_preferences or {}).items()
+            if key in NotificationPreferences.model_fields
+        }
+    )
+
+
+@router.put(
+    "/notification-preferences",
+    response_model=NotificationPreferences,
+    summary="Enregistrer mes préférences de notification",
+)
+async def save_notification_preferences(
+    payload: NotificationPreferences,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> NotificationPreferences:
+    """Remplacer l'ensemble des préférences par celles fournies."""
+    user = await update_notification_preferences(
+        session, current_user, payload.model_dump()
+    )
+    return NotificationPreferences.model_validate(user.notification_preferences)

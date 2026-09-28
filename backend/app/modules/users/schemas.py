@@ -43,6 +43,9 @@ class UserRead(BaseModel):
     )
     locale: str = Field(max_length=LOCALE_MAX_LENGTH)
     timezone: str = Field(max_length=TIMEZONE_MAX_LENGTH)
+    phone: str | None = Field(default=None, max_length=32)
+    address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=120)
     status: UserStatus
     global_role: GlobalRole
     created_at: datetime
@@ -74,6 +77,28 @@ class UserProfileUpdate(BaseModel):
     )
     locale: str | None = Field(default=None, max_length=LOCALE_MAX_LENGTH)
     timezone: str | None = Field(default=None, max_length=TIMEZONE_MAX_LENGTH)
+    phone: str | None = Field(default=None, max_length=32)
+    address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=120)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value: object) -> object:
+        if value is None or not isinstance(value, str):
+            return value
+        normalized = re.sub(r"[\s\.\-()]", "", value)
+        if not normalized:
+            return None
+        if not re.fullmatch(r"\+?[0-9]{6,20}", normalized):
+            raise ValueError("Le numéro de téléphone est invalide")
+        return normalized
+
+    @field_validator("address", "city", mode="before")
+    @classmethod
+    def normalize_free_text(cls, value: object) -> object:
+        if value is None or not isinstance(value, str):
+            return value
+        return value.strip() or None
 
     @field_validator("display_name", mode="before")
     @classmethod
@@ -175,3 +200,19 @@ class UserRoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     global_role: GlobalRole
+
+
+class NotificationPreferences(BaseModel):
+    """Canaux et sujets de notification choisis par l'utilisateur."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel_email: bool = True
+    channel_sms: bool = False
+    channel_push: bool = False
+    payment_reminders: bool = True
+    payments_received: bool = True
+    late_payments: bool = True
+    payouts: bool = True
+    new_members: bool = False
+    newsletter: bool = False

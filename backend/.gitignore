@@ -11,3 +11,6 @@ __pycache__/
 *.py[codz]
 *$py.class
 .venv/
+
+# Sauvegardes locales produites par app.seed.reset
+backups/

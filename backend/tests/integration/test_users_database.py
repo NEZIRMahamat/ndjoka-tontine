@@ -94,6 +94,10 @@ def test_alembic_head_is_applied_to_postgresql_17(
             "created_at",
             "updated_at",
             "deactivated_at",
+            "phone",
+            "address",
+            "city",
+            "notification_preferences",
         }
 
     run_database_scenario(test_database_url, scenario)

@@ -9,6 +9,7 @@ from app.modules.contributions.enums import ContributionStatus
 from app.modules.cycles.enums import CycleStatus
 from app.modules.cycles.models import Cycle
 from app.modules.cycles.services import CycleError, get_cycle
+from app.modules.fees.pricing import quote_from_gross
 from app.modules.memberships import repositories as membership_repository
 from app.modules.memberships.enums import MembershipRole
 from app.modules.memberships.models import Membership
@@ -49,14 +50,29 @@ def require_role(membership: Membership, roles: set[MembershipRole]):
         raise PayoutError("Rôle interne insuffisant", 403)
 
 
-def read_item(item: Payout, membership: Membership) -> PayoutRead:
+FEE_FIELDS = {"platform_fee", "solidarity_fund_share", "net_amount"}
+
+
+def read_item(
+    item: Payout, membership: Membership, contribution_amount: Decimal | None = None
+) -> PayoutRead:
     values = {
         name: getattr(item, name)
         for name in PayoutRead.model_fields
-        if name not in PRIVATE
-        or membership.role in FINANCIAL
-        or membership.id == item.beneficiary_membership_id
+        if name not in FEE_FIELDS
+        and (
+            name not in PRIVATE
+            or membership.role in FINANCIAL
+            or membership.id == item.beneficiary_membership_id
+        )
     }
+    if contribution_amount is not None:
+        fees = quote_from_gross(item.expected_amount, contribution_amount)
+        values.update(
+            platform_fee=fees.fee_total,
+            solidarity_fund_share=fees.solidarity_fund_share,
+            net_amount=fees.net_amount,
+        )
     return PayoutRead.model_validate(values)
 
 
@@ -404,7 +420,7 @@ async def transition(session, payout_id, actor, action, payload=None):
             )
         await session.commit()
         await session.refresh(item)
-        return read_item(item, membership)
+        return read_item(item, membership, cycle.contribution_amount)
     except Exception:
         await session.rollback()
         raise

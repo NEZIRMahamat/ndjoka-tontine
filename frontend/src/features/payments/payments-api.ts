@@ -31,6 +31,9 @@ export type Payout = {
   status: PayoutStatus
   scheduled_for: string
   received_at: string | null
+  platform_fee?: string | null
+  solidarity_fund_share?: string | null
+  net_amount?: string | null
 }
 
 export type ActivityPage<T> = { items: T[]; total: number; limit: number; offset: number }

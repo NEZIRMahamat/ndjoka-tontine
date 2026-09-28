@@ -10,6 +10,9 @@ export type UserProfile = {
   avatar_url: string | null
   locale: string
   timezone: string
+  phone: string | null
+  address: string | null
+  city: string | null
   status: UserStatus
   global_role: GlobalRole
   created_at: string
@@ -30,6 +33,9 @@ export function isUserProfile(value: unknown): value is UserProfile {
     (value.display_name === null || typeof value.display_name === 'string') &&
     (value.avatar_url === null || typeof value.avatar_url === 'string') &&
     typeof value.locale === 'string' && typeof value.timezone === 'string' &&
+    (value.phone === null || value.phone === undefined || typeof value.phone === 'string') &&
+    (value.address === null || value.address === undefined || typeof value.address === 'string') &&
+    (value.city === null || value.city === undefined || typeof value.city === 'string') &&
     ['active', 'suspended', 'deactivated'].includes(String(value.status)) &&
     ['user', 'support', 'platform_admin'].includes(String(value.global_role)) &&
     typeof value.created_at === 'string' && typeof value.updated_at === 'string' &&
@@ -54,7 +60,15 @@ export async function getCurrentUser(accessToken: string, signal?: AbortSignal):
 
 export async function updateCurrentUser(
   accessToken: string,
-  changes: { display_name?: string; avatar_url?: string | null; locale?: string; timezone?: string },
+  changes: {
+    display_name?: string
+    avatar_url?: string | null
+    locale?: string
+    timezone?: string
+    phone?: string | null
+    address?: string | null
+    city?: string | null
+  },
 ): Promise<CurrentUserResponse> {
   return parseCurrentUser(await apiRequest(accessToken, '/api/v1/me', {
     method: 'PATCH', body: JSON.stringify(changes),

@@ -32,7 +32,7 @@ def test_alembic_structure_is_configured_without_credentials() -> None:
     assert (ALEMBIC_DIRECTORY / "script.py.mako").is_file()
     assert (ALEMBIC_DIRECTORY / "versions").is_dir()
     assert config.get_main_option("sqlalchemy.url") is None
-    assert scripts.get_current_head() == "c8f2a5d71e43"
+    assert scripts.get_current_head() == "e7d1c9a2f4b8"
 
 
 def test_alembic_offline_environment_uses_database_url(
@@ -101,3 +101,6 @@ def test_alembic_offline_environment_uses_database_url(
     assert "CREATE TABLE outbox_events" in upgrade_sql
     assert "CREATE TABLE email_deliveries" in upgrade_sql
     assert "CREATE TABLE resend_webhook_events" in upgrade_sql
+    assert "CREATE TABLE payment_methods" in upgrade_sql
+    assert "ADD COLUMN category VARCHAR(20) DEFAULT 'other' NOT NULL" in upgrade_sql
+    assert "notification_preferences JSONB" in upgrade_sql

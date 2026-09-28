@@ -1,13 +1,14 @@
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import router as ai_router_module
+from app.ai.agent_ndjoka import AgentReply
 from app.core.auth0 import get_current_token_payload
 from app.db.session import get_db_session
 from app.main import app
@@ -158,7 +159,7 @@ def test_chat_returns_agent_reply_when_allowed(client: TestClient) -> None:
         patch.object(
             ai_router_module,
             "run_ndjoka_agent",
-            AsyncMock(return_value="Vous avez 2 tontines actives."),
+            AsyncMock(return_value=AgentReply("Vous avez 2 tontines actives.", [])),
         ),
     ):
         response = client.post(
@@ -212,3 +213,52 @@ def test_chat_falls_back_gracefully_on_agent_error(client: TestClient) -> None:
 
     assert response.status_code == 503
     assert "indisponible" in response.json()["detail"].lower()
+
+
+def test_chat_returns_recommendation_cards_when_agent_proposes_tontines(
+    client: TestClient,
+) -> None:
+    authenticate(build_user())
+    card = {
+        "id": str(uuid4()),
+        "name": "Vacances 2026",
+        "description": None,
+        "category": "travel",
+        "city": "Lyon",
+        "currency": "EUR",
+        "contribution_amount": 100.0,
+        "frequency": "monthly",
+        "monthly_equivalent": 100.0,
+        "seats_left": 5,
+        "member_count": 5,
+        "max_members": 10,
+        "affinity_score": 0.82,
+        "is_eligible": True,
+        "ineligibility_reason": None,
+        "reasons": ["100 par mois, compatible avec votre capacité"],
+        "cover_image_url": None,
+    }
+
+    with (
+        patch.object(
+            ai_router_module,
+            "check_moderation",
+            AsyncMock(return_value={"is_allowed": True, "refusal_message": None}),
+        ),
+        patch.object(
+            ai_router_module,
+            "run_ndjoka_agent",
+            AsyncMock(return_value=AgentReply("Voici une piste.", [card])),
+        ),
+    ):
+        response = client.post(
+            "/api/v1/ai/chat",
+            json={"messages": [{"role": "user", "content": "Une tontine voyage ?"}]},
+            headers={"Authorization": "******", "Origin": FRONTEND_ORIGIN},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reply"] == "Voici une piste."
+    assert body["recommendations"][0]["name"] == "Vacances 2026"
+    assert body["recommendations"][0]["affinity_score"] == 0.82

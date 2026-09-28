@@ -176,8 +176,8 @@ class AISettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     groq_api_key: SecretStr
-    groq_agent_model: str = "llama-3.3-70b-versatile"
-    groq_moderator_model: str = "llama-3.1-8b-instant"
+    groq_agent_model: str = "openai/gpt-oss-120b"
+    groq_moderator_model: str = "openai/gpt-oss-20b"
     ai_history_limit: int = 16
 
     @field_validator("groq_api_key")

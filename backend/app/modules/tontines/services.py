@@ -4,15 +4,20 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit.services import change, record
+from app.modules.cycles.enums import CycleStatus
+from app.modules.cycles.models import Cycle
 from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.memberships.repositories import insert_membership
 from app.modules.tontines import repositories
 from app.modules.tontines.enums import TontineStatus
 from app.modules.tontines.models import Tontine
-from app.modules.tontines.schemas import TontineCreate, TontineUpdate
+from app.modules.tontines.schemas import TontineCreate, TontineSetup, TontineUpdate
 from app.modules.users.enums import UserStatus
 from app.modules.users.models import User
+
+# Champs dont seule la présence est tracée dans l'audit (texte libre).
+PRESENCE_ONLY_FIELDS = frozenset({"description", "rules", "goal", "cover_image_url"})
 
 
 class TontineError(Exception):
@@ -53,42 +58,102 @@ async def list_tontines(
     )
 
 
+async def _insert_tontine_with_owner(
+    session: AsyncSession, actor: User, payload: TontineCreate
+) -> Tontine:
+    """Insérer la tontine, son propriétaire et l'audit sans valider la transaction."""
+    tontine = Tontine(
+        **payload.model_dump(), created_by_user_id=actor.id, status=TontineStatus.DRAFT
+    )
+    await repositories.insert_tontine(session, tontine)
+    await insert_membership(
+        session,
+        Membership(
+            tontine_id=tontine.id,
+            user_id=actor.id,
+            role=MembershipRole.OWNER,
+            status=MembershipStatus.ACTIVE,
+        ),
+    )
+    await record(
+        session,
+        event_name="tontine.created",
+        actor_user_id=actor.id,
+        subject_user_id=actor.id,
+        tontine_id=tontine.id,
+        resource_type="tontine",
+        resource_id=tontine.id,
+        changes={
+            "name": {"to": tontine.name},
+            "currency": {"to": tontine.currency},
+            "max_members": {"to": tontine.max_members},
+            "status": {"to": tontine.status.value},
+            "category": {"to": tontine.category.value},
+            "is_discoverable": {"to": tontine.is_discoverable},
+            "order_mode": {"to": tontine.order_mode.value},
+        },
+    )
+    return tontine
+
+
 async def create_tontine(
     session: AsyncSession, actor: User, payload: TontineCreate
 ) -> Tontine:
     require_active(actor)
-    tontine = Tontine(
-        **payload.model_dump(), created_by_user_id=actor.id, status=TontineStatus.DRAFT
-    )
     try:
-        await repositories.insert_tontine(session, tontine)
-        await insert_membership(
-            session,
-            Membership(
-                tontine_id=tontine.id,
-                user_id=actor.id,
-                role=MembershipRole.OWNER,
-                status=MembershipStatus.ACTIVE,
-            ),
+        tontine = await _insert_tontine_with_owner(session, actor, payload)
+        await session.commit()
+        await session.refresh(tontine)
+        return tontine
+    except Exception:
+        await session.rollback()
+        raise
+
+
+async def setup_tontine(
+    session: AsyncSession, actor: User, payload: TontineSetup
+) -> tuple[Tontine, Cycle]:
+    """Créer la tontine et son premier cycle (brouillon) dans une transaction."""
+    require_active(actor)
+    try:
+        tontine = await _insert_tontine_with_owner(
+            session, actor, payload.tontine_payload()
         )
+        cycle = Cycle(
+            tontine_id=tontine.id,
+            sequence_number=1,
+            name=f"Cycle 1 · {tontine.name}"[:120],
+            contribution_amount=payload.contribution_amount,
+            frequency=payload.frequency,
+            start_date=payload.start_date,
+            timezone=payload.timezone,
+            beneficiary_contributes=payload.beneficiary_contributes,
+            created_by_user_id=actor.id,
+            status=CycleStatus.DRAFT,
+        )
+        session.add(cycle)
+        await session.flush()
         await record(
             session,
-            event_name="tontine.created",
+            event_name="cycle.created",
             actor_user_id=actor.id,
             subject_user_id=actor.id,
             tontine_id=tontine.id,
-            resource_type="tontine",
-            resource_id=tontine.id,
+            resource_type="cycle",
+            resource_id=cycle.id,
             changes={
-                "name": {"to": tontine.name},
-                "currency": {"to": tontine.currency},
-                "max_members": {"to": tontine.max_members},
-                "status": {"to": tontine.status.value},
+                "sequence_number": {"to": cycle.sequence_number},
+                "status": {"to": cycle.status.value},
+                "contribution_amount": {"to": cycle.contribution_amount},
+                "frequency": {"to": cycle.frequency.value},
+                "start_date": {"to": cycle.start_date},
+                "beneficiary_contributes": {"to": cycle.beneficiary_contributes},
             },
         )
         await session.commit()
         await session.refresh(tontine)
-        return tontine
+        await session.refresh(cycle, attribute_names=["turns"])
+        return tontine, cycle
     except Exception:
         await session.rollback()
         raise
@@ -117,7 +182,7 @@ async def update_tontine(
             if old_value != value:
                 audit_changes[field] = (
                     change(old_value is not None, value is not None)
-                    if field == "description"
+                    if field in PRESENCE_ONLY_FIELDS
                     else change(old_value, value)
                 )
             setattr(tontine, field, value)

@@ -17,8 +17,10 @@ from app.modules.users.repositories import (
 )
 
 EDITABLE_PROFILE_FIELDS = frozenset(
-    {"display_name", "avatar_url", "locale", "timezone"}
+    {"display_name", "avatar_url", "locale", "timezone", "phone", "address", "city"}
 )
+# Données de contact : seule leur présence est tracée dans l'audit.
+PRESENCE_ONLY_FIELDS = frozenset({"phone", "address"})
 
 
 class UserProvisioningError(RuntimeError):
@@ -101,7 +103,11 @@ async def update_user_profile(
 
     try:
         audit_changes = {
-            field_name: change(getattr(user, field_name), value)
+            field_name: (
+                change(getattr(user, field_name) is not None, value is not None)
+                if field_name in PRESENCE_ONLY_FIELDS
+                else change(getattr(user, field_name), value)
+            )
             for field_name, value in changes.items()
             if getattr(user, field_name) != value
         }
@@ -266,6 +272,20 @@ async def update_user_global_role(
         await session.commit()
         await session.refresh(target)
         return target
+    except Exception:
+        await session.rollback()
+        raise
+
+
+async def update_notification_preferences(
+    session: AsyncSession, user: User, preferences: dict[str, bool]
+) -> User:
+    """Remplacer les préférences de notification de l'utilisateur."""
+    try:
+        user.notification_preferences = dict(preferences)
+        await session.commit()
+        await session.refresh(user)
+        return user
     except Exception:
         await session.rollback()
         raise

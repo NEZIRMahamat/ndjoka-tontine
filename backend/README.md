@@ -38,7 +38,7 @@ Le fichier `.env.dev` est chargé par défaut ; `APP_ENV=prod` charge
 | `EMAIL_FROM_NAME`, `EMAIL_FROM_ADDRESS`, `EMAIL_CONTACT_ADDRESS`, `EMAIL_REPLY_TO` | Expéditeur des e-mails |
 | `FRONTEND_BASE_URL` | Base des liens insérés dans les e-mails |
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | Secrets Resend |
-| `GROQ_API_KEY`, `GROQ_AGENT_MODEL`, `GROQ_MODERATOR_MODEL`, `AI_HISTORY_LIMIT` | Assistant Ndjoka AI |
+| `GROQ_API_KEY`, `GROQ_AGENT_MODEL`, `GROQ_MODERATOR_MODEL`, `AI_HISTORY_LIMIT` | Assistant Ndjoka AI (défauts : `openai/gpt-oss-120b` et `openai/gpt-oss-20b`) |
 
 Aucun Client Secret Auth0 n'est nécessaire : les tokens RS256 sont validés
 avec les clés publiques JWKS du tenant. Les secrets ne sont jamais versionnés.
@@ -70,7 +70,9 @@ tests/          tests unitaires et d'intégration PostgreSQL
 | [discovery](app/modules/discovery/README.md) | Recommandation et adhésion aux tontines ouvertes |
 | [audit](app/modules/audit/README.md) | Historique métier immuable |
 | [notifications](app/modules/notifications/README.md) | Notifications internes et e-mails |
-| [ai](app/ai/README.md) | Assistant conversationnel |
+| [fees](app/modules/fees/README.md) | Barème de commission et simulation des frais |
+| [payment_methods](app/modules/payment_methods/README.md) | Moyens de paiement déclarés (référence masquée) |
+| [ai](app/ai/README.md) | Assistant conversationnel (contrôle préalable + agent outillé) |
 
 ## Conventions
 
@@ -120,6 +122,27 @@ uv run alembic revision --autogenerate -m "description"
   `app/db/models.py`, sinon l'autogénération l'ignore.
 - `tests/test_migrations.py` vérifie la révision head et l'absence de dérive
   entre modèles et migrations : le mettre à jour à chaque nouvelle révision.
+
+## Données de démonstration
+
+`app/seed/demo.py` charge un jeu de données cohérent : 40 profils fictifs
+(`demo|…`), une tontine terminée, deux tontines privées en cours (retards,
+déclarations à confirmer, versements reçus), une tontine qui démarre dans trois
+jours et sept tontines ouvertes en recrutement. Le compte réel passé avec
+`--presenter "auth0|xxxx:Nom"` est propriétaire, trésorier ou membre selon la
+tontine, avec profil d'épargnant, moyens de paiement et notifications.
+
+`app/seed/reset.py` enchaîne sauvegarde (`pg_dump`, ou export JSON si la
+version du serveur diffère), suppression du schéma `public`, `alembic upgrade
+head` et chargement de la démo. `--env prod` cible `.env.prod` ; `--no-seed`
+laisse une base vide ; `--no-backup` saute la sauvegarde.
+
+```bash
+uv run python -m app.seed.reset --env dev --yes
+uv run python -m app.seed.reset --env prod --yes --presenter "auth0|xxxx:Nom"
+```
+
+Le script de démo refuse de s'exécuter si des données `demo|` existent déjà.
 
 ## Déploiement
 

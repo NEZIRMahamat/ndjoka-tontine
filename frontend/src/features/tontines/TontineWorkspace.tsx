@@ -52,10 +52,10 @@ import TontineCyclesPanel from '@/features/tontines/TontineCyclesPanel'
 import TontinePayoutsPanel from '@/features/tontines/TontinePayoutsPanel'
 
 const roleLabels: Record<MembershipRole, string> = {
-  owner: 'Propriétaire',
+  owner: 'Organisateur',
   manager: 'Gestionnaire',
   treasurer: 'Trésorier',
-  member: 'Membre',
+  member: 'Participant',
 }
 
 export default function TontineWorkspace() {
@@ -279,7 +279,7 @@ export default function TontineWorkspace() {
   if (loadError) {
     return (
       <div className="space-y-4">
-        <BackLink onClick={() => navigate('/tontines')} />
+        <BackLink onClick={() => navigate(tontineId ? `/tontines/${tontineId}` : '/tontines')} />
         <p role="alert" className="text-sm text-destructive">
           {loadError}
         </p>
@@ -290,7 +290,7 @@ export default function TontineWorkspace() {
   if (loading || !tontine || !members) {
     return (
       <div className="space-y-4">
-        <BackLink onClick={() => navigate('/tontines')} />
+        <BackLink onClick={() => navigate(tontineId ? `/tontines/${tontineId}` : '/tontines')} />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -306,7 +306,7 @@ export default function TontineWorkspace() {
   const cycles = cycleState.tontineId === tontineId ? cycleState.cycles : []
   const cyclesError = cycleState.tontineId === tontineId ? cycleState.error : ''
   const overviewCycle = activeCycleOf(cycles)
-  const overviewTurn = overviewCycle ? currentTurnOf(overviewCycle, new Date(renderTime)) : undefined
+  const overviewTurn = overviewCycle ? currentTurnOf(overviewCycle, [], new Date(renderTime)) : undefined
   const cyclePot =
     overviewCycle && activeMembersCount > 0
       ? Number(overviewCycle.contribution_amount) *
@@ -315,7 +315,7 @@ export default function TontineWorkspace() {
 
   return (
     <div className="space-y-6">
-      <BackLink onClick={() => navigate('/tontines')} />
+      <BackLink onClick={() => navigate(`/tontines/${tontine.id}`)} />
 
       <div className="flex flex-col justify-between gap-4 rounded-2xl border border-border bg-card p-6 sm:flex-row sm:items-start">
         <div>
@@ -393,7 +393,7 @@ export default function TontineWorkspace() {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(`/tontines/${tontine.id}/cycles/${overviewCycle.id}/turns/${overviewTurn.id}`)}
+                  onClick={() => navigate(`/tontines/${tontine.id}/tour/${overviewTurn.id}`)}
                 >
                   Voir le tour <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -438,7 +438,7 @@ export default function TontineWorkspace() {
                             <button
                               type="button"
                               className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/40"
-                              onClick={() => navigate(`/tontines/${tontine.id}/cycles/${overviewCycle.id}/turns/${turn.id}`)}
+                              onClick={() => navigate(`/tontines/${tontine.id}/tour/${turn.id}`)}
                             >
                               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${isNext ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                                 {turn.position}
@@ -773,7 +773,7 @@ export default function TontineWorkspace() {
 function BackLink({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
-      <ArrowLeft className="h-4 w-4" /> Retour aux groupes
+      <ArrowLeft className="h-4 w-4" /> Retour à la tontine
     </button>
   )
 }

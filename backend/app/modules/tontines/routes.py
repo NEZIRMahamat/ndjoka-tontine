@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.modules.cycles.schemas import CycleRead
 from app.modules.memberships.dependencies import OwnerMembership
 from app.modules.tontines import services
 from app.modules.tontines.enums import TontineStatus
@@ -13,6 +14,8 @@ from app.modules.tontines.schemas import (
     TontineCreate,
     TontineList,
     TontineRead,
+    TontineSetup,
+    TontineSetupRead,
     TontineUpdate,
 )
 from app.modules.users.dependencies import get_current_active_user
@@ -54,6 +57,23 @@ async def create(
     tontine = await services.create_tontine(session, actor, payload)
     response.headers["Location"] = f"/api/v1/tontines/{tontine.id}"
     return TontineRead.model_validate(tontine)
+
+
+@router.post(
+    "/setup",
+    response_model=TontineSetupRead,
+    status_code=201,
+    summary="Créer une tontine et son premier cycle (création guidée)",
+)
+async def setup(
+    payload: TontineSetup, session: Session, actor: Actor, response: Response
+) -> TontineSetupRead:
+    tontine, cycle = await services.setup_tontine(session, actor, payload)
+    response.headers["Location"] = f"/api/v1/tontines/{tontine.id}"
+    return TontineSetupRead(
+        tontine=TontineRead.model_validate(tontine),
+        cycle=CycleRead.model_validate(cycle),
+    )
 
 
 @router.get("", response_model=TontineList, summary="Lister mes tontines")

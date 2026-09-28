@@ -4,8 +4,8 @@ import {
   parseOffsetPage,
   type OffsetPage,
 } from '@/lib/http'
-import type { MembershipRole } from '@/features/tontines/tontines-api'
 
+export type MembershipRole = 'owner' | 'manager' | 'treasurer' | 'member'
 export type CycleFrequency = 'weekly' | 'monthly'
 export type CycleStatus = 'draft' | 'scheduled' | 'active' | 'completed' | 'cancelled'
 export type ContributionStatus = 'pending' | 'declared' | 'confirmed' | 'rejected' | 'cancelled'
@@ -224,7 +224,7 @@ async function cycleAction(
   token: string,
   tontineId: string,
   cycleId: string,
-  action: 'turns/generate' | 'schedule' | 'activate' | 'complete' | 'cancel',
+  action: 'turns/generate' | 'schedule' | 'activate' | 'launch' | 'complete' | 'cancel',
 ): Promise<Cycle> {
   const payload = await apiRequest(
     token,
@@ -308,6 +308,11 @@ export async function reorderCycleTurns(
   )
   if (!isCycle(payload)) throw new Error('Le cycle reçu est invalide')
   return payload
+}
+
+/** Ordre des tours selon la règle du groupe, planification et activation en une étape. */
+export function launchCycle(token: string, tontineId: string, cycleId: string) {
+  return cycleAction(token, tontineId, cycleId, 'launch')
 }
 
 export function scheduleCycle(token: string, tontineId: string, cycleId: string) {

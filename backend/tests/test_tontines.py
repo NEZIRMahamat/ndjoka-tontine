@@ -15,7 +15,7 @@ from app.modules.memberships.dependencies import get_current_membership
 from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.tontines import repositories, services
-from app.modules.tontines.enums import TontineStatus
+from app.modules.tontines.enums import TontineCategory, TontineStatus, TurnOrderMode
 from app.modules.tontines.models import Tontine
 from app.modules.tontines.schemas import TontineCreate, TontineUpdate
 from app.modules.users.dependencies import get_current_ndjoka_user
@@ -44,6 +44,13 @@ def tontine(actor):
         max_members=None,
         is_discoverable=True,
         min_reliability_score=None,
+        category=TontineCategory.FAMILY,
+        goal=None,
+        city="Paris",
+        order_mode=TurnOrderMode.REGISTRATION,
+        rules=None,
+        late_penalty_enabled=False,
+        cover_image_url=None,
         status=TontineStatus.DRAFT,
         created_by_user_id=actor.id,
         created_at=now,

@@ -35,5 +35,28 @@ class ChatRequest(BaseModel):
         return value
 
 
+class RecommendedTontine(BaseModel):
+    """Carte de tontine ouverte proposée par l'assistant."""
+
+    id: str
+    name: str
+    description: str | None = None
+    category: str
+    city: str | None = None
+    currency: str
+    contribution_amount: float | None = None
+    frequency: str | None = None
+    monthly_equivalent: float | None = None
+    seats_left: int | None = None
+    member_count: int
+    max_members: int | None = None
+    affinity_score: float
+    is_eligible: bool
+    ineligibility_reason: str | None = None
+    reasons: list[str] = Field(default_factory=list)
+    cover_image_url: str | None = None
+
+
 class ChatResponse(BaseModel):
     reply: str
+    recommendations: list[RecommendedTontine] | None = None

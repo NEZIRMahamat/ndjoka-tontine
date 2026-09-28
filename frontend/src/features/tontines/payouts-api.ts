@@ -34,6 +34,9 @@ export type Payout = {
   cancelled_at: string | null
   created_at: string
   updated_at: string
+  platform_fee?: string | null
+  solidarity_fund_share?: string | null
+  net_amount?: string | null
   approved_by_user_id?: string | null
   declared_paid_by_user_id?: string | null
   external_reference?: string | null

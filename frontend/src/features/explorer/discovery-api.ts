@@ -1,5 +1,6 @@
 import { apiRequest, isRecord } from '@/lib/http'
 import type { ContributionRhythm } from '@/features/profile/saver-profile-api'
+import type { TontineCategory, TurnOrderMode } from '@/features/tontines/tontines-api'
 
 export type AffinityReason = {
   criterion: 'budget' | 'rhythm' | 'group_size' | 'horizon' | 'profile'
@@ -20,6 +21,18 @@ export type DiscoveredTontine = {
   monthly_equivalent: string | null
   min_reliability_score: string | null
   created_at: string
+  status: 'draft' | 'active' | 'archived'
+  category: TontineCategory
+  goal: string | null
+  city: string | null
+  order_mode: TurnOrderMode
+  rules: string | null
+  late_penalty_enabled: boolean
+  cover_image_url: string | null
+  cycle_status: 'draft' | 'scheduled' | 'active' | 'completed' | 'cancelled' | null
+  start_date: string | null
+  organizer_name: string | null
+  organizer_since: string | null
   affinity_score: string
   is_eligible: boolean
   ineligibility_reason: string | null
@@ -59,6 +72,9 @@ function isDiscovered(value: unknown): value is DiscoveredTontine {
     (value.monthly_equivalent === null || typeof value.monthly_equivalent === 'string') &&
     (value.min_reliability_score === null || typeof value.min_reliability_score === 'string') &&
     typeof value.created_at === 'string' &&
+    typeof value.category === 'string' &&
+    typeof value.order_mode === 'string' &&
+    typeof value.late_penalty_enabled === 'boolean' &&
     typeof value.affinity_score === 'string' &&
     typeof value.is_eligible === 'boolean' &&
     (value.ineligibility_reason === null || typeof value.ineligibility_reason === 'string') &&
@@ -120,7 +136,7 @@ export async function getDiscoveredTontine(
 }
 
 export async function joinTontine(accessToken: string, tontineId: string): Promise<void> {
-  await apiRequest(accessToken, `/api/v1/discovery/tontines/${tontineId}/join`, {
+  await apiRequest(accessToken, `/api/v1/discovery/tontines/${encodeURIComponent(tontineId)}/join`, {
     method: 'POST',
   })
 }

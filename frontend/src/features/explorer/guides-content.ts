@@ -145,3 +145,14 @@ export const GUIDES: Guide[] = [
 export function getGuide(slug: string): Guide | undefined {
   return GUIDES.find((guide) => guide.slug === slug)
 }
+
+const GUIDE_IMAGES: Record<string, string> = {
+  'choisir-premiere-tontine': 'https://images.unsplash.com/photo-1636388951474-d84e2e5bb6a3?auto=format&fit=crop&w=1000&q=80',
+  'comprendre-cotisation-cycle': 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1000&q=80',
+  'ameliorer-score-fiabilite': 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1000&q=80',
+  'organiser-tontine-reussie': 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1000&q=80',
+}
+
+export function guideImageFor(guide: Guide): string {
+  return GUIDE_IMAGES[guide.slug] ?? GUIDE_IMAGES['choisir-premiere-tontine']
+}

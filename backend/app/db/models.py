@@ -19,6 +19,7 @@ def load_all_models() -> tuple[type[Base], ...]:
         OutboxEvent,
         ResendWebhookEvent,
     )
+    from app.modules.payment_methods.models import PaymentMethod
     from app.modules.payouts.models import Payout
     from app.modules.profiles.models import SaverProfile
     from app.modules.tontines.models import Tontine
@@ -39,4 +40,5 @@ def load_all_models() -> tuple[type[Base], ...]:
         EmailDelivery,
         ResendWebhookEvent,
         SaverProfile,
+        PaymentMethod,
     )
