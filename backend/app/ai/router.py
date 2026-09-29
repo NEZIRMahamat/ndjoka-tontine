@@ -15,10 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.agent_guardrail import ModerationError, check_moderation
 from app.ai.agent_ndjoka import AgentError, run_ndjoka_agent
+from app.ai.diagnostic import AIDiagnosticRead, describe_failure, run_diagnostic
 from app.ai.schemas import ChatRequest, ChatResponse, RecommendedTontine
 from app.core.config import get_ai_settings
 from app.db.session import get_db_session
-from app.modules.users.dependencies import get_current_active_user
+from app.modules.users.dependencies import (
+    get_current_active_user,
+    get_current_platform_admin,
+)
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/ai", tags=["Ndjoka AI"])
@@ -26,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 ActorDep = Annotated[User, Depends(get_current_active_user)]
+AdminDep = Annotated[User, Depends(get_current_platform_admin)]
 
 FALLBACK_REFUSAL = (
     "Je peux vous accompagner sur vos tontines, vos cotisations, vos "
@@ -55,7 +60,7 @@ async def chat_with_agent(
     try:
         settings = get_ai_settings()
     except (ValidationError, SettingsError) as error:
-        logger.error("Configuration Ndjoka AI invalide")
+        logger.error("Configuration Ndjoka AI invalide : %s", describe_failure(error))
         raise HTTPException(status_code=503, detail=FALLBACK_ERROR) from error
 
     history = payload.messages[-settings.ai_history_limit :]
@@ -64,7 +69,10 @@ async def chat_with_agent(
     try:
         moderation = await check_moderation(last_user_message)
     except ModerationError as error:
-        logger.warning("Ndjoka AI indisponible pendant la vérification")
+        logger.warning(
+            "Ndjoka AI indisponible pendant la vérification : %s",
+            describe_failure(error),
+        )
         raise HTTPException(status_code=503, detail=FALLBACK_ERROR) from error
 
     if not moderation.get("is_allowed", False):
@@ -75,7 +83,9 @@ async def chat_with_agent(
             session, actor, [message.model_dump() for message in history]
         )
     except AgentError as error:
-        logger.warning("Ndjoka AI indisponible pendant la réponse")
+        logger.warning(
+            "Ndjoka AI indisponible pendant la réponse : %s", describe_failure(error)
+        )
         raise HTTPException(status_code=503, detail=FALLBACK_ERROR) from error
 
     reply = outcome if isinstance(outcome, str) else outcome.reply
@@ -90,3 +100,17 @@ async def chat_with_agent(
         ]
         or None,
     )
+
+
+@router.get(
+    "/diagnostic",
+    response_model=AIDiagnosticRead,
+    responses={
+        401: {"description": "Access Token absent, invalide ou expiré"},
+        403: {"description": "Réservé aux administrateurs de la plateforme"},
+    },
+    summary="Vérifier la configuration de l'assistant (administrateurs)",
+)
+async def diagnose_agent(_: AdminDep) -> AIDiagnosticRead:
+    """Contrôler la configuration et la joignabilité du fournisseur, sans exposer la clé."""
+    return await run_diagnostic()

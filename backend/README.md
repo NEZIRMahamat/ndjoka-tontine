@@ -174,5 +174,19 @@ Points d'attention :
   `auth0_sub` exact, jamais par e-mail
   ([procédure](../infra/README.md#désigner-le-premier-administrateur)).
 
+### Diagnostiquer Ndjoka AI en production
+
+Quand l'assistant répond « momentanément indisponible », la cause est
+journalisée côté API (classe et message de l'erreur du fournisseur, jamais la
+clé) : Render > Logs, lignes `Ndjoka AI indisponible pendant ...`.
+
+Un administrateur de la plateforme peut aussi appeler
+`GET /api/v1/ai/diagnostic` (Swagger `/docs` > Authorize avec son Access
+Token). La réponse indique si la configuration se charge, les quatre derniers
+caractères de la clé utilisée, si Groq est joignable et si les deux modèles
+configurés existent pour cette clé. Les causes habituelles sont une variable
+`GROQ_API_KEY`, `GROQ_AGENT_MODEL` ou `GROQ_MODERATOR_MODEL` absente ou mal
+recopiée sur Render.
+
 Variables Render, Auth0, Resend et vérifications après déploiement :
 [README racine](../README.md#production).

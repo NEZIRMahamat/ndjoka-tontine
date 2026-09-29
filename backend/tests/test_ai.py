@@ -262,3 +262,46 @@ def test_chat_returns_recommendation_cards_when_agent_proposes_tontines(
     assert body["reply"] == "Voici une piste."
     assert body["recommendations"][0]["name"] == "Vacances 2026"
     assert body["recommendations"][0]["affinity_score"] == 0.82
+
+
+def test_diagnostic_is_reserved_to_platform_admins(client: TestClient) -> None:
+    authenticate(build_user())
+
+    response = client.get(
+        "/api/v1/ai/diagnostic",
+        headers={"Authorization": "******", "Origin": FRONTEND_ORIGIN},
+    )
+
+    assert response.status_code == 403
+
+
+def test_diagnostic_reports_configuration_without_leaking_the_key(
+    client: TestClient,
+) -> None:
+    admin = build_user()
+    admin.global_role = GlobalRole.PLATFORM_ADMIN
+    authenticate(admin)
+    report = ai_router_module.AIDiagnosticRead(
+        configured=True,
+        agent_model="openai/gpt-oss-120b",
+        moderator_model="openai/gpt-oss-20b",
+        api_key_suffix="…aaaN",
+        provider_reachable=True,
+        agent_model_available=True,
+        moderator_model_available=True,
+        available_models=["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
+    )
+
+    with patch.object(
+        ai_router_module, "run_diagnostic", AsyncMock(return_value=report)
+    ):
+        response = client.get(
+            "/api/v1/ai/diagnostic",
+            headers={"Authorization": "******", "Origin": FRONTEND_ORIGIN},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider_reachable"] is True
+    assert body["api_key_suffix"] == "…aaaN"
+    assert "gsk_" not in str(body)
