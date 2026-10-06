@@ -172,13 +172,14 @@ Variables : `APP_ENV=prod`, `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`,
 `GROQ_API_KEY`. Leur rôle est décrit dans le
 [README backend](backend/README.md#configuration).
 
-Le Web Service n'exécute ni les migrations ni les tâches planifiées :
+Le Web Service envoie lui-même les e-mails (invitations, notifications) grâce
+au dispatcher Outbox intégré. Il n'exécute en revanche ni les migrations ni le
+job de rappels :
 
 - les migrations sont appliquées sur RDS avant le déploiement
   ([procédure](infra/README.md#appliquer-les-migrations)) ;
-- le job de rappels (une fois par jour) et le worker de notifications
-  (régulièrement) doivent être lancés par un ordonnanceur externe
-  ([commandes](backend/README.md#déploiement)).
+- le job de rappels de cotisation (une fois par jour) doit être lancé par un
+  ordonnanceur externe ([commandes](backend/README.md#déploiement)).
 
 Sur l'offre gratuite, le service se met en veille après 15 minutes
 d'inactivité ; la première requête suivante prend environ une minute.

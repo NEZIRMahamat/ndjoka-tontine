@@ -1,16 +1,45 @@
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
-from app.core.config import get_cors_settings
+from app.core.config import get_cors_settings, get_email_settings
 from app.core.request_context import request_id_context
+from app.modules.notifications.dispatcher import dispatcher
+from app.workers.notifications import run_once_safely
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Traiter l'Outbox notifications pendant toute la vie du processus."""
+    try:
+        settings = get_email_settings()
+        dispatcher.start(
+            run_once_safely,
+            interval=settings.outbox_poll_interval_seconds,
+            limit=settings.outbox_batch_limit,
+        )
+    except Exception:
+        logger.exception(
+            "Dispatcher Outbox non démarré : configuration e-mail invalide"
+        )
+    try:
+        yield
+    finally:
+        await dispatcher.stop()
+
 
 app = FastAPI(
     title="Ndjoka Tontine API",
     description="API Ndjoka - Plateforme de tontine digitale",
     version="0.9.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

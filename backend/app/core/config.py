@@ -134,6 +134,22 @@ class EmailSettings(BaseSettings):
     frontend_base_url: str = "http://localhost:5173"
     resend_api_key: SecretStr = SecretStr("")
     resend_webhook_secret: SecretStr = SecretStr("")
+    outbox_poll_interval_seconds: float = 30
+    outbox_batch_limit: int = 50
+
+    @field_validator("outbox_poll_interval_seconds")
+    @classmethod
+    def validate_poll_interval(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError("OUTBOX_POLL_INTERVAL_SECONDS doit être positif ou nul")
+        return value
+
+    @field_validator("outbox_batch_limit")
+    @classmethod
+    def validate_batch_limit(cls, value: int) -> int:
+        if not 1 <= value <= 100:
+            raise ValueError("OUTBOX_BATCH_LIMIT doit être compris entre 1 et 100")
+        return value
 
     @field_validator("email_provider")
     @classmethod

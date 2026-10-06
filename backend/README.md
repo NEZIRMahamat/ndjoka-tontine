@@ -38,6 +38,7 @@ Le fichier `.env.dev` est chargé par défaut ; `APP_ENV=prod` charge
 | `EMAIL_FROM_NAME`, `EMAIL_FROM_ADDRESS`, `EMAIL_CONTACT_ADDRESS`, `EMAIL_REPLY_TO` | Expéditeur des e-mails |
 | `FRONTEND_BASE_URL` | Base des liens insérés dans les e-mails |
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | Secrets Resend |
+| `OUTBOX_POLL_INTERVAL_SECONDS`, `OUTBOX_BATCH_LIMIT` | Dispatcher Outbox intégré à l'API (défauts `30` et `50` ; `0` désactive) |
 | `GROQ_API_KEY`, `GROQ_AGENT_MODEL`, `GROQ_MODERATOR_MODEL`, `AI_HISTORY_LIMIT` | Assistant Ndjoka AI (défauts : `openai/gpt-oss-120b` et `openai/gpt-oss-20b`) |
 
 Aucun Client Secret Auth0 n'est nécessaire : les tokens RS256 sont validés
@@ -161,15 +162,21 @@ Points d'attention :
 - **Migrations** : elles ne sont pas lancées au build. Les appliquer sur
   AWS RDS avant de déployer une version qui en dépend
   ([procédure](../infra/README.md#appliquer-les-migrations)).
-- **Tâches planifiées** : le Web Service ne lance ni le worker ni les rappels.
-  Un ordonnanceur externe doit exécuter une fois par jour, dans cet ordre :
+- **E-mails et notifications** : l'API traite elle-même l'Outbox (invitations,
+  changements de rôle, cycles, paiements) via un dispatcher de fond démarré au
+  lancement du processus. Il se réveille après chaque commit produisant un
+  événement et toutes les `OUTBOX_POLL_INTERVAL_SECONDS` secondes. Aucun
+  worker externe n'est nécessaire pour envoyer les e-mails Resend.
+- **Rappels de cotisation** : le Web Service ne lance pas le job de rappels
+  J-3. Un ordonnanceur externe doit exécuter une fois par jour :
 
   ```bash
   uv run python -m app.jobs.contribution_reminders --once
-  uv run python -m app.workers.notifications --once
   ```
 
-  puis relancer le worker à intervalle régulier.
+  Le worker CLI `uv run python -m app.workers.notifications --once` reste
+  disponible pour vider l'Outbox manuellement ou si le dispatcher intégré est
+  désactivé (`OUTBOX_POLL_INTERVAL_SECONDS=0`).
 - **Premier administrateur** : le rôle `platform_admin` s'attribue par
   `auth0_sub` exact, jamais par e-mail
   ([procédure](../infra/README.md#désigner-le-premier-administrateur)).

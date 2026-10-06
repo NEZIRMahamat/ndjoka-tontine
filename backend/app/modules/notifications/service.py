@@ -12,6 +12,7 @@ from app.core.request_context import get_request_id
 from app.modules.memberships.enums import MembershipRole, MembershipStatus
 from app.modules.memberships.models import Membership
 from app.modules.notifications import repository
+from app.modules.notifications.dispatcher import dispatcher
 from app.modules.notifications.email import (
     EmailMessage,
     EmailProvider,
@@ -139,7 +140,7 @@ async def enqueue_event(
         "action_path": action_path,
     }
     _validate_payload(payload)
-    return await repository.enqueue(
+    outbox_event = await repository.enqueue(
         session,
         {
             "event_name": event_name,
@@ -150,6 +151,8 @@ async def enqueue_event(
             "deduplication_key": deduplication_key,
         },
     )
+    dispatcher.notify_after_commit(session)
+    return outbox_event
 
 
 async def list_notifications(

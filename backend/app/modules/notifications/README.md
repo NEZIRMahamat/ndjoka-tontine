@@ -24,11 +24,19 @@ transactionnelle et Resend.
 
 ## Exécution
 
-Ces processus ne tournent pas dans le Web Service ; ils doivent être planifiés.
+L'Outbox est traitée par le dispatcher intégré (`dispatcher.py`), démarré par
+le `lifespan` FastAPI : tâche asyncio réveillée après chaque commit ayant
+produit un événement (`enqueue_event` enregistre un hook `after_commit`) et
+toutes les `OUTBOX_POLL_INTERVAL_SECONDS` secondes (défaut 30, `0` désactive).
+Chaque réveil enchaîne les lots de `OUTBOX_BATCH_LIMIT` événements tant qu'un
+lot complet a été traité. Les erreurs sont journalisées et n'arrêtent pas la
+boucle.
+
+Reste à planifier à l'extérieur du Web Service :
 
 ```bash
 uv run python -m app.jobs.contribution_reminders --once   # 1 fois par jour, rappel à J-3
-uv run python -m app.workers.notifications --once          # régulièrement, --limit 1 à 100
+uv run python -m app.workers.notifications --once          # optionnel, vidage manuel de l'Outbox
 ```
 
 En local, `EMAIL_PROVIDER=console` évite tout envoi réel. En production,
